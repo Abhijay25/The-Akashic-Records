@@ -18,7 +18,9 @@ chrome.runtime.onInstalled.addListener(async () => {
 // MV3 service workers are killed after ~30s of inactivity.
 // Create the alarm on every SW startup (top-level) so it's always active,
 // regardless of whether onInstalled or onStartup fired.
-chrome.alarms.create("sw-keepalive", { periodInMinutes: 1 / 3 }) // ~20s
+// Chrome MV3 clamps alarms to ≥30s (dev) / ≥1min (production).
+// Use 0.5min (30s) to stay within dev minimum and give SW room before the 30s idle kill.
+chrome.alarms.create("sw-keepalive", { periodInMinutes: 0.5 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "sw-keepalive") {

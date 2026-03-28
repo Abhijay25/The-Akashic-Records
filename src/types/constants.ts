@@ -1,10 +1,12 @@
 export const STORAGE_KEYS = {
   BOOK_INDEX: "books:index",
   BOOK_PREFIX: "books:chapter:",
+  FEED_PROGRESS_PREFIX: "feed:progress:",
   VAULT_SALT: "vault:salt",
   VAULT_DATA: "vault:data",
   LIBRARIAN_JOBS_INDEX: "librarian:jobs:index",
   LIBRARIAN_JOB_PREFIX: "librarian:job:",
+  LIBRARIAN_PROGRESS_PREFIX: "librarian:progress:",
   LIBRARIAN_SETTINGS: "librarian:settings",
 } as const
 

@@ -3,6 +3,7 @@ import { Storage } from "@plasmohq/storage"
 import { submitFilledForm } from "~utils/tinyfish-execute"
 import { broadcastProgress } from "~background/ports/agent-status"
 import { STORAGE_KEYS } from "~types/constants"
+import { isDigitalGhostPrompt } from "~types/librarian"
 import type { LibrarianJob } from "~types/librarian"
 import type { ApproveSubmitRequest, ApproveSubmitResponse } from "~types/messages"
 
@@ -36,6 +37,10 @@ const handler: PlasmoMessaging.MessageHandler<
     return
   }
 
+  const isDigitalGhost =
+    job.payload.type === "AD_HOC_PROMPT" && isDigitalGhostPrompt(job.payload.prompt)
+  const itemLabel = isDigitalGhost ? "request" : "application"
+
   let updatedJob: LibrarianJob = {
     ...job,
     status: "submitting",
@@ -50,7 +55,7 @@ const handler: PlasmoMessaging.MessageHandler<
     completedCount: 0,
     totalCount: body.approvedUrls.length,
     results: updatedJob.results,
-    message: `Submitting ${body.approvedUrls.length} approved application${body.approvedUrls.length === 1 ? "" : "s"}…`,
+    message: `Submitting ${body.approvedUrls.length} approved ${itemLabel}${body.approvedUrls.length === 1 ? "" : "s"}…`,
   })
 
   // Submit approved URLs sequentially
@@ -88,7 +93,7 @@ const handler: PlasmoMessaging.MessageHandler<
       completedCount: i + 1,
       totalCount: body.approvedUrls.length,
       results: updatedJob.results,
-      message: `Submitted ${i + 1} of ${body.approvedUrls.length}…`,
+      message: `Submitted ${i + 1} of ${body.approvedUrls.length} ${itemLabel}${i + 1 === 1 ? "" : "s"}…`,
     })
   }
 
@@ -111,7 +116,7 @@ const handler: PlasmoMessaging.MessageHandler<
     completedCount: submittedCount,
     totalCount: body.approvedUrls.length,
     results: updatedJob.results,
-    message: `Done — ${submittedCount} application${submittedCount === 1 ? "" : "s"} submitted`,
+    message: `Done — ${submittedCount} ${itemLabel}${submittedCount === 1 ? "" : "s"} submitted`,
   })
 
   res.send({ success: true })

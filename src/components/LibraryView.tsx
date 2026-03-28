@@ -86,21 +86,37 @@ function HistoryItem({
 
 function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () => void }) {
   const [book] = useStorage<Book>({ key: `${STORAGE_KEYS.BOOK_PREFIX}${bookId}`, instance: localStore })
+  const [storedFeedEvent] = useStorage<FeedProgressEvent>({
+    key: `${STORAGE_KEYS.FEED_PROGRESS_PREFIX}${bookId}`,
+    instance: localStore,
+  })
   const port = useAgentPort()
 
   const raw = port.data
   // Only use live port events for the active in-progress book — never override a stored "done" state
-  const feedEvent =
-    raw?.type === "feed-progress" && raw.bookId === bookId && book?.status !== "done"
+  // Only use live port events while the book is actively in-progress.
+  // Never override a terminal state ("done" or "error") stored in chrome.storage.
+  const terminalStatuses = new Set(["done", "error"])
+  const liveFeedEvent =
+    raw?.type === "feed-progress" && raw.bookId === bookId && !terminalStatuses.has(book?.status ?? "")
       ? raw
       : null
+  const feedEvent =
+    liveFeedEvent ??
+    (storedFeedEvent?.type === "feed-progress" && storedFeedEvent.bookId === bookId
+      ? storedFeedEvent
+      : null)
 
   // If there's no live event and the book is stuck in an intermediate state,
   // treat it as "done" if it has chapters, or "error" if it has none.
   // Only applies to books that are at least 2 minutes old (not a fresh run).
   const intermediateStatuses = new Set(["idle", "scouting", "scraping", "parsing"])
   const bookAgeMs = book ? Date.now() - new Date(book.updatedAt).getTime() : 0
-  const isStuck = !feedEvent && book && intermediateStatuses.has(book.status) && bookAgeMs > 120_000
+  const isStuck =
+    !liveFeedEvent &&
+    book &&
+    intermediateStatuses.has(book.status) &&
+    bookAgeMs > 120_000
   const effectiveStatus = isStuck
     ? (book.chapters.length > 0 ? "done" : "error")
     : (feedEvent?.status ?? book?.status)

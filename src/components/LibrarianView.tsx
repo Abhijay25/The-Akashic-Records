@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import { usePort } from "@plasmohq/messaging/hook"
+import { Storage } from "@plasmohq/storage"
+import { useStorage } from "@plasmohq/storage/hook"
 import type {
   StartLibrarianRequest,
   StartLibrarianResponse,
@@ -9,12 +11,15 @@ import type {
   LibrarianProgressEvent,
   FeedProgressEvent,
 } from "~types/messages"
-import type { ExecutionResult, LibrarianJobStatus } from "~types/librarian"
+import { STORAGE_KEYS } from "~types/constants"
+import type { ExecutionResult, LibrarianJob, LibrarianJobStatus } from "~types/librarian"
 
 type PortEvent = FeedProgressEvent | LibrarianProgressEvent
 // Cast needed until `plasmo dev` generates PortsMetadata types
 const useAgentPort = () =>
   (usePort as (name: string) => { data?: PortEvent })("agent-status")
+
+const localStore = new Storage({ area: "local" })
 
 type Phase = "idle" | "running" | "hitl" | "done" | "error"
 
@@ -39,6 +44,14 @@ export default function LibrarianView() {
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const port = useAgentPort()
+  const [storedJob] = useStorage<LibrarianJob>({
+    key: `${STORAGE_KEYS.LIBRARIAN_JOB_PREFIX}${jobId ?? "__none__"}`,
+    instance: localStore,
+  })
+  const [storedEvent] = useStorage<LibrarianProgressEvent>({
+    key: `${STORAGE_KEYS.LIBRARIAN_PROGRESS_PREFIX}${jobId ?? "__none__"}`,
+    instance: localStore,
+  })
 
   // Update step log and phase from port events
   useEffect(() => {
@@ -66,6 +79,47 @@ export default function LibrarianView() {
     }
   }, [port.data])
 
+  useEffect(() => {
+    if (!jobId) return
+
+    const effectiveStatus = storedEvent?.status ?? storedJob?.status
+    if (!effectiveStatus) return
+
+    if (!latestEvent && storedEvent?.type === "librarian-progress" && storedEvent.jobId === jobId) {
+      setLatestEvent(storedEvent)
+    }
+
+    if (effectiveStatus === "awaiting_approval") {
+      const filledUrls = (storedEvent?.results ?? storedJob?.results ?? [])
+        .filter((r) => r.status === "filled")
+        .map((r) => r.url)
+      setApprovedUrls(new Set(filledUrls))
+      setPhase("hitl")
+      return
+    }
+
+    if (effectiveStatus === "done") {
+      setPhase("done")
+      return
+    }
+
+    if (effectiveStatus === "error") {
+      setError(storedEvent?.message ?? storedJob?.error ?? "Something went wrong")
+      setPhase("error")
+      return
+    }
+
+    const jobAgeMs = storedJob ? Date.now() - new Date(storedJob.updatedAt).getTime() : 0
+    const stalledStatuses = new Set(["idle", "scouting", "extracting", "executing", "submitting"])
+    if (storedJob && stalledStatuses.has(storedJob.status) && jobAgeMs > 120_000) {
+      setError("Librarian run did not complete. Try again.")
+      setPhase("error")
+      return
+    }
+
+    setPhase("running")
+  }, [jobId, latestEvent, storedEvent, storedJob])
+
   // Auto-scroll step log
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -88,6 +142,9 @@ export default function LibrarianView() {
 
       if (res.error) {
         setError(res.error)
+        setPhase("error")
+      } else if (!res.jobId) {
+        setError("Pipeline failed to start. Reload the extension and try again.")
         setPhase("error")
       } else {
         setJobId(res.jobId)

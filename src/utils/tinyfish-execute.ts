@@ -44,6 +44,41 @@ Return JSON: { "atsUrl": "<external application URL or null>", "jobTitle": "<job
 
 const SUBMIT_FORM_GOAL = `Navigate to the application form on this page and click the final Submit/Apply button to complete the submission. The form should already be filled — your only task is to find and click the submit button.`
 
+function buildDataBrokerOptOutGoal(persona: UserPersona): string {
+  return `You are a privacy assistant helping a user submit a data-broker opt-out or removal request.
+
+USER DATA:
+${JSON.stringify(
+    {
+      firstName: persona.personal.firstName,
+      lastName: persona.personal.lastName,
+      email: persona.personal.email,
+      phone: persona.personal.phone,
+      location: persona.personal.location,
+    },
+    null,
+    2
+  )}
+
+INSTRUCTIONS:
+1. Find the site's privacy, suppression, removal, or opt-out request flow.
+2. Navigate to the correct form or request page.
+3. Fill the request using the provided user data.
+4. If the site asks for a profile/listing URL, search the page for the best matching field and populate it only if you can infer it from the current site. Otherwise leave it blank and mention it in notes.
+5. If there are checkboxes or confirmation prompts required to proceed, complete them.
+6. STOP before the final submit/remove button. Leave the request ready for user review.
+7. Return ONLY JSON:
+{
+  "fieldsFilledCount": <number>,
+  "mandatoryFieldsCount": <number>,
+  "mandatoryFieldsFilled": <number>,
+  "formPages": <number>,
+  "readyToSubmit": <boolean>,
+  "shortAnswersGenerated": <number>,
+  "notes": "<brief notes about what was filled or any blockers>"
+}`
+}
+
 // ── Internal Stream Runner ───────────────────────────────────────────────────
 
 interface TinyFishRawResult {
@@ -151,6 +186,56 @@ export async function executeTinyFishForm({
   return {
     url,
     status: "filled",
+    filledAt: new Date().toISOString(),
+  }
+}
+
+/**
+ * Navigates to a broker removal page and prepares the opt-out request.
+ * Stops before the final submit so the user can review first.
+ */
+export async function executeDataBrokerOptOut({
+  url,
+  persona,
+}: {
+  url: string
+  persona: UserPersona
+}): Promise<ExecutionResult> {
+  const goal = buildDataBrokerOptOutGoal(persona)
+  const { content, success } = await runStealth(url, goal)
+
+  if (!success) {
+    return {
+      url,
+      status: "error",
+      error: "TinyFish failed to prepare opt-out request",
+    }
+  }
+
+  let parsed: FormFillResult
+  try {
+    parsed = JSON.parse(content) as FormFillResult
+  } catch {
+    return {
+      url,
+      status: "error",
+      error: "Failed to parse TinyFish opt-out result JSON",
+    }
+  }
+
+  if (!parsed.readyToSubmit) {
+    return {
+      url,
+      status: "error",
+      error: `Opt-out form not ready to submit. Notes: ${parsed.notes}`,
+      filledAt: new Date().toISOString(),
+    }
+  }
+
+  return {
+    url,
+    status: "filled",
+    company: new URL(url).hostname,
     filledAt: new Date().toISOString(),
   }
 }

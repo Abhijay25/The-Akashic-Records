@@ -70,7 +70,14 @@ const handler: PlasmoMessaging.MessageHandler<
     })
   })
 
-  res.send({ jobId })
+  res.send(
+    jobId
+      ? { jobId }
+      : {
+          jobId: "",
+          error: "Pipeline failed to start. Check API keys and the extension console.",
+        }
+  )
 }
 
 export default handler

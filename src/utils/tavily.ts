@@ -14,16 +14,20 @@ const client = tavily({ apiKey: process.env.PLASMO_PUBLIC_TAVILY_API_KEY ?? "" }
  */
 export async function tavilyScout({
   query,
-  maxResults = 5
+  maxResults = 5,
+  timeoutMs = 20_000
 }: {
   query: string
   maxResults?: number
+  timeoutMs?: number
 }): Promise<ScoutResult[]> {
-  const response = await client.search(query, {
-    searchDepth: "advanced",
-    maxResults,
-    includeAnswer: false
-  })
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Tavily search timed out after ${timeoutMs}ms`)), timeoutMs)
+  )
+  const response = await Promise.race([
+    client.search(query, { searchDepth: "advanced", maxResults, includeAnswer: false }),
+    timeout,
+  ])
 
   return (response.results ?? [])
     .filter((r) => r.score >= 0.5)

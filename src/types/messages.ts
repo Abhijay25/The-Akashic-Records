@@ -36,7 +36,7 @@ export interface SetupPersonaResponse {
 // start-librarian message (popup → background)
 export interface StartLibrarianRequest {
   payload: TaskPayload
-  passphrase: string
+  passphrase?: string
 }
 
 export interface StartLibrarianResponse {
