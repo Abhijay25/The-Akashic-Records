@@ -1,22 +1,25 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
-import type { FeedProgressEvent } from "~types/messages"
+import type { FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 
 /**
  * Registry of active push functions, one per connected popup instance.
  * Keyed by a random ID assigned on connect so we can remove on disconnect.
  *
- * start-feed.ts calls broadcastProgress() which fans out to all active ports.
+ * start-feed.ts and librarian.ts call broadcastProgress() which fans out to all active ports.
  * This works because all background modules share the same service worker scope.
+ * Discriminated on event.type: "feed-progress" | "librarian-progress".
  */
-const activeSenders = new Map<string, (event: FeedProgressEvent) => void>()
+type ProgressEvent = FeedProgressEvent | LibrarianProgressEvent
 
-export function broadcastProgress(event: FeedProgressEvent): void {
+const activeSenders = new Map<string, (event: ProgressEvent) => void>()
+
+export function broadcastProgress(event: ProgressEvent): void {
   for (const send of activeSenders.values()) {
     send(event)
   }
 }
 
-const handler: PlasmoMessaging.PortHandler<never, FeedProgressEvent> = async (
+const handler: PlasmoMessaging.PortHandler<never, ProgressEvent> = async (
   req,
   res
 ) => {
