@@ -1,5 +1,5 @@
 import type { FeedConfig, BookStatus } from "./book"
-import type { TaskPayload, UserPersona, LibrarianJobStatus, ExecutionResult } from "./librarian"
+import type { TaskPayload, UserPersona, LibrarianJobStatus, ExecutionResult, LibrarianSettings } from "./librarian"
 
 // start-feed message (popup → background)
 export interface StartFeedRequest {
@@ -52,6 +52,21 @@ export interface ApproveSubmitRequest {
 
 export interface ApproveSubmitResponse {
   success: boolean
+  error?: string
+}
+
+// get-librarian-settings / update-librarian-settings messages
+export interface GetLibrarianSettingsResponse {
+  settings: LibrarianSettings
+}
+
+export interface UpdateLibrarianSettingsRequest {
+  settings: Partial<LibrarianSettings>
+}
+
+export interface UpdateLibrarianSettingsResponse {
+  success: boolean
+  settings: LibrarianSettings
   error?: string
 }
 

@@ -135,6 +135,18 @@ export const LibrarianJobSchema = z.object({
 
 export type LibrarianJob = z.infer<typeof LibrarianJobSchema>
 
+// ── LibrarianSettings ────────────────────────────────────────────────────────
+
+export const LibrarianSettingsSchema = z.object({
+  requireHitl: z.boolean().default(false),
+})
+
+export type LibrarianSettings = z.infer<typeof LibrarianSettingsSchema>
+
+export const DEFAULT_LIBRARIAN_SETTINGS: LibrarianSettings = {
+  requireHitl: false,
+}
+
 // ── Blacklist ────────────────────────────────────────────────────────────────
 
 export const BLACKLISTED_DOMAINS = [

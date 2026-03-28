@@ -2,7 +2,7 @@ import { Storage } from "@plasmohq/storage"
 import { tavilyScout } from "~utils/tavily"
 import { filterBlacklisted } from "~utils/blacklist"
 import { vaultRetrieve, VaultLockedError } from "~utils/vault"
-import { extractAtsLink, executeTinyFishForm } from "~utils/tinyfish-execute"
+import { extractAtsLink, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
 import { STORAGE_KEYS } from "~types/constants"
 import { LibrarianJobSchema } from "~types/librarian"
 import type {
@@ -61,7 +61,8 @@ async function batchProcess<T, R>(
 export async function runLibrarian(
   payload: TaskPayload,
   passphrase: string,
-  onProgress: ProgressCallback
+  onProgress: ProgressCallback,
+  options: { requireHitl: boolean } = { requireHitl: false }
 ): Promise<LibrarianJob> {
   const now = new Date().toISOString()
 
@@ -251,8 +252,7 @@ export async function runLibrarian(
     await persistJob(job)
   }
 
-  // ── Phase 5: HITL Pause ──────────────────────────────────────────────────
-  // Pipeline stops here. approve-submit handler resumes on user action.
+  // ── Phase 5: Submit or Pause ─────────────────────────────────────────────
 
   const filledCount = job.results.filter((r) => r.status === "filled").length
   const errorCount = job.results.filter((r) => r.status === "error").length
@@ -265,10 +265,32 @@ export async function runLibrarian(
     return job
   }
 
-  await emit({
-    status: "awaiting_approval",
-    message: `${filledCount} form${filledCount === 1 ? "" : "s"} filled — review and approve to submit`,
-  })
+  if (!options.requireHitl) {
+    // Auto-submit all filled forms without pausing
+    await emit({ status: "submitting", message: `Submitting ${filledCount} application${filledCount === 1 ? "" : "s"}…` })
+    for (const result of job.results.filter((r) => r.status === "filled")) {
+      let submitResult: ExecutionResult
+      try {
+        submitResult = await submitFilledForm(result.url)
+      } catch (err) {
+        submitResult = { url: result.url, status: "error", error: String(err) }
+      }
+      job = {
+        ...job,
+        results: job.results.map((r) => r.url === result.url ? { ...r, ...submitResult } : r),
+        updatedAt: new Date().toISOString(),
+      }
+      await persistJob(job)
+    }
+    const submittedCount = job.results.filter((r) => r.status === "submitted").length
+    await emit({ status: "done", message: `Done — ${submittedCount} application${submittedCount === 1 ? "" : "s"} submitted` })
+  } else {
+    // HITL mode: pause and wait for approve-submit
+    await emit({
+      status: "awaiting_approval",
+      message: `${filledCount} form${filledCount === 1 ? "" : "s"} filled — review and approve to submit`,
+    })
+  }
 
   return job
 }

@@ -1,9 +1,14 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
+import { Storage } from "@plasmohq/storage"
 import { runLibrarian } from "~agents/librarian"
-import { TaskPayloadSchema } from "~types/librarian"
+import { TaskPayloadSchema, LibrarianSettingsSchema, DEFAULT_LIBRARIAN_SETTINGS } from "~types/librarian"
+import type { LibrarianSettings } from "~types/librarian"
+import { STORAGE_KEYS } from "~types/constants"
 import { vaultExists } from "~utils/vault"
 import { broadcastProgress } from "~background/ports/agent-status"
 import type { StartLibrarianRequest, StartLibrarianResponse } from "~types/messages"
+
+const storage = new Storage({ area: "local" })
 
 const handler: PlasmoMessaging.MessageHandler<
   StartLibrarianRequest,
@@ -31,6 +36,9 @@ const handler: PlasmoMessaging.MessageHandler<
     return
   }
 
+  const stored = await storage.get<LibrarianSettings>(STORAGE_KEYS.LIBRARIAN_SETTINGS)
+  const settings = LibrarianSettingsSchema.parse(stored ?? DEFAULT_LIBRARIAN_SETTINGS)
+
   let jobId = ""
 
   await new Promise<void>((resolve) => {
@@ -46,7 +54,8 @@ const handler: PlasmoMessaging.MessageHandler<
           resolved = true
           resolve()
         }
-      }
+      },
+      { requireHitl: settings.requireHitl }
     )
 
     // Safety fallback: unblock if first progress event takes >3s
