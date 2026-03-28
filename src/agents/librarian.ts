@@ -1,7 +1,7 @@
 import { Storage } from "@plasmohq/storage"
 import { tavilyScout } from "~utils/tavily"
 import { filterBlacklisted } from "~utils/blacklist"
-import { vaultRetrieve, VaultLockedError } from "~utils/vault"
+import { MOCK_PERSONA } from "~types/librarian"
 import { extractAtsLink, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
 import { STORAGE_KEYS } from "~types/constants"
 import { LibrarianJobSchema } from "~types/librarian"
@@ -60,7 +60,6 @@ async function batchProcess<T, R>(
  */
 export async function runLibrarian(
   payload: TaskPayload,
-  passphrase: string,
   onProgress: ProgressCallback,
   options: { requireHitl: boolean } = { requireHitl: false }
 ): Promise<LibrarianJob> {
@@ -100,19 +99,7 @@ export async function runLibrarian(
   // Emit initial event so callers get the jobId immediately
   await emit({ status: "idle", message: "Starting Librarian…" })
 
-  // ── Phase 1: Vault Unlock ─────────────────────────────────────────────────
-
-  let persona
-  try {
-    persona = await vaultRetrieve(passphrase)
-  } catch (err) {
-    const message =
-      err instanceof VaultLockedError
-        ? "Incorrect passphrase — vault locked"
-        : "Failed to retrieve persona from vault"
-    await emit({ status: "error", error: message, message })
-    return job
-  }
+  const persona = MOCK_PERSONA
 
   // ── Phase 2 (Mode A only): Scout LinkedIn ────────────────────────────────
 

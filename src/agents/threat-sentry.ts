@@ -106,7 +106,8 @@ export async function runThreatSentry(
   let queries: string[]
   try {
     queries = await extractKeywords(config.prompt)
-  } catch {
+  } catch (err) {
+    console.warn("[library] extractKeywords failed, using raw prompt:", err)
     queries = [config.prompt]
   }
 

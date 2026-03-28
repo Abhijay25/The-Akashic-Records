@@ -59,7 +59,10 @@ const handler: PlasmoMessaging.MessageHandler<
     })
   })
 
-  res.send({ bookId })
+  res.send(bookId
+    ? { bookId }
+    : { bookId: "", error: "Pipeline failed to start. Check API keys and the extension console." }
+  )
 }
 
 export default handler

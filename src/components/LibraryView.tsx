@@ -1,8 +1,11 @@
 import { useState } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import { usePort } from "@plasmohq/messaging/hook"
+import { Storage } from "@plasmohq/storage"
 import { useStorage } from "@plasmohq/storage/hook"
 import { STORAGE_KEYS } from "~types/constants"
+
+const localStore = new Storage({ area: "local" })
 import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 import type { Book, Chapter } from "~types/book"
 
@@ -13,7 +16,7 @@ const useAgentPort = () =>
 
 export default function LibraryView() {
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
-  const [bookIds] = useStorage<string[]>(STORAGE_KEYS.BOOK_INDEX, [])
+  const [bookIds] = useStorage<string[]>({ key: STORAGE_KEYS.BOOK_INDEX, instance: localStore }, [])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -65,7 +68,7 @@ function HistoryItem({
   isActive: boolean
   onClick: () => void
 }) {
-  const [book] = useStorage<Book>(`${STORAGE_KEYS.BOOK_PREFIX}${bookId}`)
+  const [book] = useStorage<Book>({ key: `${STORAGE_KEYS.BOOK_PREFIX}${bookId}`, instance: localStore })
   return (
     <button
       onClick={onClick}
@@ -82,13 +85,27 @@ function HistoryItem({
 }
 
 function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () => void }) {
-  const [book] = useStorage<Book>(`${STORAGE_KEYS.BOOK_PREFIX}${bookId}`)
+  const [book] = useStorage<Book>({ key: `${STORAGE_KEYS.BOOK_PREFIX}${bookId}`, instance: localStore })
   const port = useAgentPort()
 
   const raw = port.data
-  const feedEvent = raw?.type === "feed-progress" && raw.bookId === bookId ? raw : null
+  // Only use live port events for the active in-progress book — never override a stored "done" state
+  const feedEvent =
+    raw?.type === "feed-progress" && raw.bookId === bookId && book?.status !== "done"
+      ? raw
+      : null
 
-  const status = feedEvent?.status ?? book?.status
+  // If there's no live event and the book is stuck in an intermediate state,
+  // treat it as "done" if it has chapters, or "error" if it has none.
+  // Only applies to books that are at least 2 minutes old (not a fresh run).
+  const intermediateStatuses = new Set(["idle", "scouting", "scraping", "parsing"])
+  const bookAgeMs = book ? Date.now() - new Date(book.updatedAt).getTime() : 0
+  const isStuck = !feedEvent && book && intermediateStatuses.has(book.status) && bookAgeMs > 120_000
+  const effectiveStatus = isStuck
+    ? (book.chapters.length > 0 ? "done" : "error")
+    : (feedEvent?.status ?? book?.status)
+
+  const status = effectiveStatus
   const chaptersCount = feedEvent?.chaptersCount ?? book?.chapters?.length ?? 0
 
   if (!book) {
@@ -117,7 +134,9 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
   if (status === "error") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-        <p className="text-red-400 text-sm text-center">{book.error ?? "Something went wrong"}</p>
+        <p className="text-red-400 text-sm text-center">
+          {isStuck ? "Search did not complete — try again" : (book.error ?? "Something went wrong")}
+        </p>
         <button onClick={onNewSearch} className="text-xs text-gray-500 hover:text-white transition-colors">
           Try a new search
         </button>
@@ -160,19 +179,25 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
     setIsLoading(true)
     setError(null)
     try {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Service worker timed out — reload the extension and try again.")), 8000)
+      )
       // Cast needed until `plasmo dev` generates MessagesMetadata types
-      const res = (await (sendToBackground as Function)({
-        name: "start-feed",
-        body: { config: { prompt: prompt.trim(), maxResults: 10, browserProfile: "lite" } },
-      })) as StartFeedResponse
-      if (res.error) {
-        setError(res.error)
+      const res = (await Promise.race([
+        (sendToBackground as Function)({
+          name: "start-feed",
+          body: { config: { prompt: prompt.trim(), maxResults: 3, browserProfile: "lite" } },
+        }),
+        timeout,
+      ])) as StartFeedResponse
+      if (res.error || !res.bookId) {
+        setError(res.error ?? "Failed to start search.")
         setIsLoading(false)
       } else {
         onBookCreated(res.bookId)
       }
-    } catch {
-      setError("Failed to start search. Check your API keys.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start search. Check your API keys.")
       setIsLoading(false)
     }
   }

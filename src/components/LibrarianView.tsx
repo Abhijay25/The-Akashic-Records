@@ -32,7 +32,6 @@ const STATUS_LABELS: Partial<Record<LibrarianJobStatus, string>> = {
 export default function LibrarianView() {
   const [phase, setPhase] = useState<Phase>("idle")
   const [prompt, setPrompt] = useState("")
-  const [passphrase, setPassphrase] = useState("")
   const [jobId, setJobId] = useState<string | null>(null)
   const [stepLog, setStepLog] = useState<string[]>([])
   const [latestEvent, setLatestEvent] = useState<LibrarianProgressEvent | null>(null)
@@ -73,7 +72,7 @@ export default function LibrarianView() {
   }, [stepLog])
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || !passphrase.trim()) return
+    if (!prompt.trim()) return
     setPhase("running")
     setStepLog([])
     setLatestEvent(null)
@@ -83,8 +82,7 @@ export default function LibrarianView() {
       const res = (await (sendToBackground as Function)({
         name: "start-librarian",
         body: {
-          payload: { type: "AD_HOC_PROMPT", prompt: prompt.trim(), maxResults: 5 },
-          passphrase: passphrase.trim(),
+          payload: { type: "AD_HOC_PROMPT", prompt: prompt.trim(), maxResults: 1 },
         },
       })) as StartLibrarianResponse
 
@@ -124,7 +122,6 @@ export default function LibrarianView() {
   const reset = () => {
     setPhase("idle")
     setPrompt("")
-    setPassphrase("")
     setJobId(null)
     setStepLog([])
     setLatestEvent(null)
@@ -150,22 +147,9 @@ export default function LibrarianView() {
             }
             className="flex-1 bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-700 resize-none focus:outline-none focus:border-gray-600 transition-colors"
           />
-          <div className="space-y-1">
-            <label className="text-[10px] text-gray-600 uppercase tracking-widest">
-              Vault passphrase
-            </label>
-            <input
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
-              placeholder="Enter your passphrase"
-              className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-700 focus:outline-none focus:border-gray-600 transition-colors"
-            />
-          </div>
           <button
             onClick={handleSubmit}
-            disabled={!prompt.trim() || !passphrase.trim()}
+            disabled={!prompt.trim()}
             className="w-full py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Let Librarian handle it

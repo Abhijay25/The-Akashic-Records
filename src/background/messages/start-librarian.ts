@@ -4,7 +4,6 @@ import { runLibrarian } from "~agents/librarian"
 import { TaskPayloadSchema, LibrarianSettingsSchema, DEFAULT_LIBRARIAN_SETTINGS } from "~types/librarian"
 import type { LibrarianSettings } from "~types/librarian"
 import { STORAGE_KEYS } from "~types/constants"
-import { vaultExists } from "~utils/vault"
 import { broadcastProgress } from "~background/ports/agent-status"
 import type { StartLibrarianRequest, StartLibrarianResponse } from "~types/messages"
 
@@ -16,23 +15,14 @@ const handler: PlasmoMessaging.MessageHandler<
 > = async (req, res) => {
   const body = req.body
 
-  if (!body?.payload || !body?.passphrase) {
-    res.send({ jobId: "", error: "Missing payload or passphrase" })
+  if (!body?.payload) {
+    res.send({ jobId: "", error: "Missing payload" })
     return
   }
 
   const parseResult = TaskPayloadSchema.safeParse(body.payload)
   if (!parseResult.success) {
     res.send({ jobId: "", error: parseResult.error.message })
-    return
-  }
-
-  const hasPersona = await vaultExists()
-  if (!hasPersona) {
-    res.send({
-      jobId: "",
-      error: "No persona stored. Set up your profile first.",
-    })
     return
   }
 
@@ -46,7 +36,6 @@ const handler: PlasmoMessaging.MessageHandler<
 
     const jobPromise = runLibrarian(
       parseResult.data,
-      body.passphrase,
       (event) => {
         broadcastProgress(event)
         if (!resolved) {

@@ -28,7 +28,7 @@ export async function runTinyFish({
   try {
     const profile = browserProfile === "full" ? BrowserProfile.STEALTH : BrowserProfile.LITE
 
-    const stream = await client.agent.stream({ goal, url, browser_profile: profile })
+    const stream = await client.agent.stream({ goal, url, browser_profile: profile, timeout: 120 })
 
     let resultContent = ""
 

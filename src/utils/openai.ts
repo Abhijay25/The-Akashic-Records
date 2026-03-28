@@ -35,7 +35,8 @@ export async function extractKeywords(prompt: string): Promise<string[]> {
       { role: "user", content: prompt }
     ],
     response_format: { type: "json_object" },
-    temperature: 0.3
+    temperature: 0.3,
+    timeout: 15000,
   })
 
   const raw = completion.choices[0]?.message?.content ?? "{}"
@@ -76,7 +77,8 @@ export async function llmA_parse(
         { role: "user", content: rawContent.slice(0, 8000) }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.1
+      temperature: 0.1,
+      timeout: 30000,
     })
 
     return completion.choices[0]?.message?.content ?? null
