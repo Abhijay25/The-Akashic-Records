@@ -34,8 +34,6 @@ const STATUS_LABELS: Partial<Record<LibrarianJobStatus, string>> = {
   error: "Something went wrong",
 }
 
-const DEFAULT_LIBRARIAN_RESULTS = 3
-
 function getResultLabel(result: ExecutionResult): string {
   try {
     return result.jobTitle ?? result.company ?? new URL(result.url).hostname
@@ -235,12 +233,12 @@ export default function LibrarianView() {
             placeholder={
               "e.g. Apply to Google, Meta, and Shopee internship listings\n\ne.g. Find all software engineering roles posted this week"
             }
-            className="flex-1 bg-brand-bg border border-brand-light rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-brand transition-colors"
+            className="flex-1 bg-[#FFF6ED] border border-[#F6B37A] rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-[#FF7A00] transition-colors"
           />
           <button
             onClick={handleSubmit}
             disabled={!prompt.trim()}
-            className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-2.5 bg-[#FF7A00] text-white rounded-lg text-sm font-semibold hover:bg-[#F6B37A] hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Let Librarian handle it
           </button>
@@ -250,7 +248,7 @@ export default function LibrarianView() {
       {phase === "running" && (
         <>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-4 h-4 border-2 border-brand-light border-t-brand rounded-full animate-spin shrink-0" />
+            <div className="w-4 h-4 border-2 border-[#F6B37A] border-t-[#FF7A00] rounded-full animate-spin shrink-0" />
             <div className="min-w-0">
               <p className="text-xs text-black truncate">
                 {STATUS_LABELS[effectiveEvent?.status ?? storedJob?.status ?? "idle"]}
@@ -263,10 +261,10 @@ export default function LibrarianView() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-brand-bg rounded-lg p-3 font-mono text-[11px] space-y-2 border border-brand-light">
+          <div className="flex-1 overflow-y-auto bg-[#FFF6ED] rounded-lg p-3 font-mono text-[11px] space-y-2 border border-[#F6B37A]">
             {stepLog.map((step, i) => (
               <div key={i} className="flex items-start gap-2">
-                <span className={`shrink-0 mt-px ${i < stepLog.length - 1 ? "text-brand" : "text-gray-400"}`}>
+                <span className={`shrink-0 mt-px ${i < stepLog.length - 1 ? "text-[#FF7A00]" : "text-gray-400"}`}>
                   {i < stepLog.length - 1 ? "✓" : ">"}
                 </span>
                 <span className={i < stepLog.length - 1 ? "text-gray-400" : "text-black"}>
@@ -278,7 +276,7 @@ export default function LibrarianView() {
               {[0, 150, 300].map((delay) => (
                 <span
                   key={delay}
-                  className="w-1.5 h-1.5 bg-brand-light rounded-full animate-bounce"
+                  className="w-1.5 h-1.5 bg-[#F6B37A] rounded-full animate-bounce"
                   style={{ animationDelay: `${delay}ms` }}
                 />
               ))}
@@ -319,14 +317,14 @@ export default function LibrarianView() {
           <div className="flex gap-2 shrink-0">
             <button
               onClick={reset}
-              className="flex-1 py-2 text-sm text-gray-500 hover:text-black border border-brand-light hover:border-brand rounded-lg transition-colors"
+              className="flex-1 py-2 text-sm text-gray-500 hover:text-black border border-[#F6B37A] hover:border-[#FF7A00] rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleApprove}
               disabled={approvedUrls.size === 0}
-              className="flex-1 py-2 text-sm font-semibold bg-brand text-white hover:bg-brand-light hover:text-black rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 py-2 text-sm font-semibold bg-[#FF7A00] text-white hover:bg-[#F6B37A] hover:text-black rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               Submit {approvedUrls.size > 0 ? `(${approvedUrls.size})` : ""}
             </button>
@@ -336,7 +334,7 @@ export default function LibrarianView() {
 
       {phase === "done" && latestEvent && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-brand-bg border-2 border-brand-light flex items-center justify-center text-2xl text-brand">
+          <div className="w-14 h-14 rounded-full bg-[#FFF6ED] border-2 border-[#F6B37A] flex items-center justify-center text-2xl text-[#FF7A00]">
             ✓
           </div>
           <div className="text-center">
@@ -366,18 +364,15 @@ export default function LibrarianView() {
             </div>
           )}
 
-          <div className="w-full bg-brand-bg border border-brand-light rounded-lg p-3 space-y-2 max-h-44 overflow-y-auto">
+          <div className="w-full bg-[#FFF6ED] border border-[#F6B37A] rounded-lg p-3 space-y-2 max-h-44 overflow-y-auto">
             {latestEvent.results.map((r) => (
               <div key={r.url} className="flex items-start gap-2 text-[11px]">
-                <span
-                  className={
-                    r.status === "submitted"
-                      ? "text-brand shrink-0"
-                      : r.status === "error"
-                        ? "text-red-500 shrink-0"
-                        : "text-gray-400 shrink-0"
-                  }
-                >
+                <span className={
+                  r.status === "submitted" ? "text-[#FF7A00] shrink-0" :
+                  r.status === "error" ? "text-red-500 shrink-0" :
+                  "text-gray-400 shrink-0"
+                }>
+
                   {r.status === "submitted" ? "✓" : r.status === "error" ? "✗" : "—"}
                 </span>
                 <div className="min-w-0">
@@ -390,7 +385,7 @@ export default function LibrarianView() {
 
           <button
             onClick={reset}
-            className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black transition-colors"
+            className="w-full py-2.5 bg-[#FF7A00] text-white rounded-lg text-sm font-semibold hover:bg-[#F6B37A] hover:text-black transition-colors"
           >
             New task
           </button>
@@ -427,12 +422,12 @@ function HitlItem({
   })()
 
   return (
-    <label className="flex items-start gap-3 p-2.5 bg-brand-bg border border-brand-light rounded-lg cursor-pointer hover:border-brand transition-colors">
+    <label className="flex items-start gap-3 p-2.5 bg-[#FFF6ED] border border-[#F6B37A] rounded-lg cursor-pointer hover:border-[#FF7A00] transition-colors">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onToggle(result.url, e.target.checked)}
-        className="mt-0.5 shrink-0 accent-brand"
+        className="mt-0.5 shrink-0 accent-[#FF7A00]"
       />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-black font-medium truncate">
