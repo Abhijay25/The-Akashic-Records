@@ -30,7 +30,7 @@ const STATUS_LABELS: Partial<Record<LibrarianJobStatus, string>> = {
 export default function LibrarianView() {
   const [phase, setPhase] = useState<Phase>("idle")
   const [prompt, setPrompt] = useState("")
-  const [passphrase, setPassphrase] = useState("")
+  const [passphrase] = useState("")
   const [jobId, setJobId] = useState<string | null>(null)
   const [stepLog, setStepLog] = useState<string[]>([])
   const [latestEvent, setLatestEvent] = useState<LibrarianProgressEvent | null>(null)
@@ -122,7 +122,6 @@ export default function LibrarianView() {
   const reset = () => {
     setPhase("idle")
     setPrompt("")
-    setPassphrase("")
     setJobId(null)
     setStepLog([])
     setLatestEvent(null)
@@ -148,22 +147,9 @@ export default function LibrarianView() {
             }
             className="flex-1 bg-[#FFF6ED] border border-[#F6B37A] rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-[#FF7A00] transition-colors"
           />
-          <div className="space-y-1">
-            <label className="text-[10px] text-gray-400 uppercase tracking-widest">
-              Vault passphrase
-            </label>
-            <input
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
-              placeholder="Enter your passphrase"
-              className="w-full bg-[#FFF6ED] border border-[#F6B37A] rounded-lg px-3 py-2 text-sm text-black placeholder-gray-400 focus:outline-none focus:border-[#FF7A00] transition-colors"
-            />
-          </div>
           <button
             onClick={handleSubmit}
-            disabled={!prompt.trim() || !passphrase.trim()}
+            disabled={!prompt.trim()}
             className="w-full py-2.5 bg-[#FF7A00] text-white rounded-lg text-sm font-semibold hover:bg-[#F6B37A] hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Let Librarian handle it
