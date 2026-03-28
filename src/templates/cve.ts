@@ -6,22 +6,25 @@ const cve: FeedTemplate = {
 
   triggerKeywords: [
     "cve",
+    "cve-",
     "vulnerability",
     "vulnerabilities",
     "exploit",
     "zero-day",
     "0day",
-    "patch",
-    "advisory",
-    "security",
-    "breach",
+    "security advisory",
+    "security patch",
+    "security bulletin",
     "malware",
     "ransomware",
-    "threat",
-    "disclosure",
+    "threat intelligence",
     "nvd",
     "nist",
-    "cvss"
+    "cvss",
+    "cwe",
+    "remote code execution",
+    "privilege escalation",
+    "buffer overflow"
   ],
 
   tinyfishGoal: `Extract the following security advisory fields from this page and return as JSON:
@@ -30,10 +33,10 @@ const cve: FeedTemplate = {
   "cvssScore": "CVSS score as a number (e.g. 9.8), or null",
   "severity": "severity rating: Critical / High / Medium / Low, or null",
   "affectedProducts": "list of affected software, products, or versions as a string",
-  "description": "full technical description of the vulnerability",
   "remediation": "patch, workaround, or mitigation details, or null",
   "publishedDate": "disclosure or publication date, or null",
-  "source": "source organization or publication name"
+  "source": "source organization or publication name",
+  "body": "complete page text preserving all paragraphs and technical detail"
 }
 Extract verbatim. Do not summarize or omit technical details.`,
 
@@ -42,33 +45,31 @@ Extract verbatim. Do not summarize or omit technical details.`,
 Return ONLY valid JSON:
 {
   "title": "<CVE ID if present, otherwise short vulnerability title>: <one-line description>",
-  "content": "<formatted markdown>"
+  "content": "<formatted markdown>",
+  "metadata": {
+    "cveId": "<CVE ID or null>",
+    "cvssScore": "<score as number or null>",
+    "severity": "<Critical/High/Medium/Low or null>",
+    "affectedProducts": "<affected products string or null>",
+    "hasRemediation": <true if remediation info exists, false otherwise>,
+    "publishedDate": "<date or null>",
+    "source": "<source or null>"
+  }
 }
 
 For content, use this exact structure:
+**CVE:** [cveId] | **CVSS:** [cvssScore] ([severity]) | **Published:** [publishedDate]
+**Affected:** [affectedProducts] | **Source:** [source]
+**Remediation:** [remediation or "None available"]
 
-## Vulnerability Summary
-| Field | Value |
-|-------|-------|
-| **CVE ID** | [cveId or N/A] |
-| **CVSS Score** | [cvssScore — e.g. 9.8 (Critical)] |
-| **Severity** | [severity] |
-| **Published** | [publishedDate or N/A] |
-| **Source** | [source] |
+---
 
-## Affected Products
-[affectedProducts — use a bullet list if multiple]
-
-## Description
-[description — full technical detail, no summarization]
-
-## Remediation
-[remediation — or "No patch available at time of publication." if null]
+[body — full article/advisory text verbatim, preserving all paragraphs and technical detail]
 
 Rules:
 - Keep all technical identifiers and version numbers exact
 - Do not add analysis or opinions
-- If a field is null, use "N/A"`
+- If a field is null, use "N/A" in the markdown header but null in metadata`
 }
 
 export default cve
