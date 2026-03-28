@@ -3,7 +3,7 @@ import { sendToBackground } from "@plasmohq/messaging"
 import { useStorage } from "@plasmohq/storage/hook"
 import { STORAGE_KEYS, PORT_NAMES } from "~types/constants"
 import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent } from "~types/messages"
-import type { Book, BookEntry } from "~types/book"
+import type { Book, Chapter } from "~types/book"
 
 // Connect to the raw chrome port that the background broadcasts progress on
 function useAgentProgress() {
@@ -102,8 +102,8 @@ function ActiveBook({
   // Use live progress if it's for this book, otherwise fall back to stored status
   const liveStatus = progress?.bookId === bookId ? progress.status : undefined
   const status = liveStatus ?? book?.status
-  const liveCount = progress?.bookId === bookId ? progress.entriesCount : undefined
-  const entriesCount = liveCount ?? book?.entries?.length ?? 0
+  const liveCount = progress?.bookId === bookId ? progress.chaptersCount : undefined
+  const entriesCount = liveCount ?? book?.chapters?.length ?? 0
 
   if (!book) {
     return (
@@ -114,7 +114,7 @@ function ActiveBook({
   }
 
   if (status === "done") {
-    if (book.entries.length === 0) {
+    if (book.chapters.length === 0) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
           <p className="text-gray-400 text-sm text-center">No articles found</p>
@@ -235,7 +235,7 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 shrink-0">
-        <span className="text-[11px] text-gray-500">{book.entries.length} articles</span>
+        <span className="text-[11px] text-gray-500">{book.chapters.length} articles</span>
         <button
           onClick={onNewSearch}
           className="text-[11px] text-gray-500 hover:text-white transition-colors"
@@ -244,7 +244,7 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
         </button>
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-gray-900">
-        {book.entries.map((entry, i) => (
+        {book.chapters.map((entry, i) => (
           <ArticleCard key={entry.id} entry={entry} index={i + 1} />
         ))}
       </div>
@@ -252,7 +252,7 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
   )
 }
 
-function ArticleCard({ entry, index }: { entry: BookEntry; index: number }) {
+function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
   const summary = entry.content
     .replace(/#{1,6}\s/g, "")
     .replace(/[*`_[\]]/g, "")
