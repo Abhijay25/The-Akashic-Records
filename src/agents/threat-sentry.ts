@@ -261,6 +261,7 @@ export async function runThreatSentry(
         id: crypto.randomUUID(),
         title: parsed.title,
         content: parsed.content,
+        metadata: parsed.metadata ?? undefined,
         sourceUrl: item.url,
         scrapedAt: new Date().toISOString()
       })

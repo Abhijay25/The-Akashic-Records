@@ -4,6 +4,7 @@ export const ChapterSchema = z.object({
   id: z.string(),
   title: z.string(),
   content: z.string(), // markdown — structure depends on Book's templateId
+  metadata: z.record(z.unknown()).optional(),
   sourceUrl: z.string().url(),
   scrapedAt: z.string().datetime()
 })

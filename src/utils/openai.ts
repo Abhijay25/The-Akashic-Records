@@ -51,7 +51,7 @@ export async function llmA_parse(
   const attempt = async (strict: boolean): Promise<string | null> => {
     const sysMsg = strict
       ? systemPrompt +
-        "\n\nCRITICAL: Return ONLY valid JSON with exactly two fields: title (string) and content (string). No extra keys, no prose outside the JSON."
+        "\n\nCRITICAL: Return ONLY valid JSON with exactly three fields: title (string), content (string), and metadata (object). No extra keys, no prose outside the JSON."
       : systemPrompt
 
     const completion = await client.chat.completions.create({
