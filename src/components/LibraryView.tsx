@@ -1,20 +1,15 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
+import { usePort } from "@plasmohq/messaging/hook"
 import { useStorage } from "@plasmohq/storage/hook"
-import { STORAGE_KEYS, PORT_NAMES } from "~types/constants"
-import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent } from "~types/messages"
+import { STORAGE_KEYS } from "~types/constants"
+import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 import type { Book, Chapter } from "~types/book"
 
-// Connect to the raw chrome port that the background broadcasts progress on
-function useAgentProgress() {
-  const [progress, setProgress] = useState<FeedProgressEvent | null>(null)
-  useEffect(() => {
-    const port = chrome.runtime.connect({ name: PORT_NAMES.AGENT_STATUS })
-    port.onMessage.addListener((msg: FeedProgressEvent) => setProgress(msg))
-    return () => port.disconnect()
-  }, [])
-  return progress
-}
+type PortEvent = FeedProgressEvent | LibrarianProgressEvent
+// Cast needed until `plasmo dev` generates PortsMetadata types
+const useAgentPort = () =>
+  (usePort as (name: string) => { data?: PortEvent })("agent-status")
 
 export default function LibraryView() {
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
@@ -52,10 +47,7 @@ export default function LibraryView() {
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {activeBookId ? (
-          <ActiveBook
-            bookId={activeBookId}
-            onNewSearch={() => setActiveBookId(null)}
-          />
+          <ActiveBook bookId={activeBookId} onNewSearch={() => setActiveBookId(null)} />
         ) : (
           <PromptView onBookCreated={setActiveBookId} />
         )}
@@ -89,21 +81,15 @@ function HistoryItem({
   )
 }
 
-function ActiveBook({
-  bookId,
-  onNewSearch,
-}: {
-  bookId: string
-  onNewSearch: () => void
-}) {
+function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () => void }) {
   const [book] = useStorage<Book>(`${STORAGE_KEYS.BOOK_PREFIX}${bookId}`)
-  const progress = useAgentProgress()
+  const port = useAgentPort()
 
-  // Use live progress if it's for this book, otherwise fall back to stored status
-  const liveStatus = progress?.bookId === bookId ? progress.status : undefined
-  const status = liveStatus ?? book?.status
-  const liveCount = progress?.bookId === bookId ? progress.chaptersCount : undefined
-  const entriesCount = liveCount ?? book?.chapters?.length ?? 0
+  const raw = port.data
+  const feedEvent = raw?.type === "feed-progress" && raw.bookId === bookId ? raw : null
+
+  const status = feedEvent?.status ?? book?.status
+  const chaptersCount = feedEvent?.chaptersCount ?? book?.chapters?.length ?? 0
 
   if (!book) {
     return (
@@ -119,10 +105,7 @@ function ActiveBook({
         <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
           <p className="text-gray-400 text-sm text-center">No articles found</p>
           <p className="text-[11px] text-gray-600 text-center">Try rephrasing your search</p>
-          <button
-            onClick={onNewSearch}
-            className="text-xs text-gray-500 hover:text-white transition-colors"
-          >
+          <button onClick={onNewSearch} className="text-xs text-gray-500 hover:text-white transition-colors">
             Try again
           </button>
         </div>
@@ -135,17 +118,13 @@ function ActiveBook({
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
         <p className="text-red-400 text-sm text-center">{book.error ?? "Something went wrong"}</p>
-        <button
-          onClick={onNewSearch}
-          className="text-xs text-gray-500 hover:text-white transition-colors"
-        >
+        <button onClick={onNewSearch} className="text-xs text-gray-500 hover:text-white transition-colors">
           Try a new search
         </button>
       </div>
     )
   }
 
-  // Loading states
   const statusLabel: Record<string, string> = {
     idle: "Starting...",
     scouting: "Searching the web...",
@@ -158,9 +137,9 @@ function ActiveBook({
       <div className="w-7 h-7 border-2 border-gray-700 border-t-white rounded-full animate-spin" />
       <div className="text-center">
         <p className="text-sm text-gray-200">{statusLabel[status ?? "idle"] ?? "Working..."}</p>
-        {entriesCount > 0 && (
+        {chaptersCount > 0 && (
           <p className="text-[11px] text-gray-500 mt-1">
-            {entriesCount} article{entriesCount !== 1 ? "s" : ""} found
+            {chaptersCount} article{chaptersCount !== 1 ? "s" : ""} found
           </p>
         )}
         <p className="text-[10px] text-gray-700 mt-3 italic max-w-[200px] truncate">
@@ -181,7 +160,7 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
     setIsLoading(true)
     setError(null)
     try {
-      // Cast needed until `plasmo dev` generates .plasmo/index.d.ts which widens MessageName
+      // Cast needed until `plasmo dev` generates MessagesMetadata types
       const res = (await (sendToBackground as Function)({
         name: "start-feed",
         body: { config: { prompt: prompt.trim(), maxResults: 10, browserProfile: "lite" } },
@@ -193,7 +172,7 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
         onBookCreated(res.bookId)
       }
     } catch {
-      setError("Failed to start search. Check your API keys in the extension settings.")
+      setError("Failed to start search. Check your API keys.")
       setIsLoading(false)
     }
   }
@@ -213,9 +192,7 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
             submit()
           }
         }}
-        placeholder={
-          "e.g. latest news on US-Iran relations\ne.g. Shopee internship openings"
-        }
+        placeholder={"e.g. latest news on US-Iran relations\ne.g. Shopee internship openings"}
         disabled={isLoading}
         className="w-full h-28 bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-700 resize-none focus:outline-none focus:border-gray-600 transition-colors"
       />
@@ -244,8 +221,8 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
         </button>
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-gray-900">
-        {book.chapters.map((entry, i) => (
-          <ArticleCard key={entry.id} entry={entry} index={i + 1} />
+        {book.chapters.map((chapter, i) => (
+          <ArticleCard key={chapter.id} entry={chapter} index={i + 1} />
         ))}
       </div>
     </div>
