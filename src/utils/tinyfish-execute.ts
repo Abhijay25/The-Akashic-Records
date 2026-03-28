@@ -23,9 +23,10 @@ INSTRUCTIONS:
 4. For SHORT ANSWER / FREE TEXT fields (e.g. "Why do you want to work here?", "Cover letter", "Additional information"): write a professional, concise answer (2-4 sentences) drawing on the applicant's experience and skills from the provided data. Tailor it to the job/company if visible on the page.
 5. For dropdown/select fields with no exact match, pick the closest reasonable option.
 6. Navigate through ALL form pages/steps — if the form is multi-page, continue to each step.
-7. Before stopping: VERIFY all mandatory/required fields (marked with * or "required") are filled. If any mandatory field is empty and you cannot determine the answer, fill it with a reasonable default from the applicant data or "Not applicable".
-8. CRITICAL: After filling ALL fields on ALL pages, STOP. Do NOT click the final Submit/Apply button. Leave the form in a filled-but-not-submitted state.
-9. Return JSON:
+7. If the site requires login, account creation, email verification, CAPTCHA, or any other authentication gate before you can continue, STOP immediately and return readyToSubmit=false with notes exactly "LOGIN_REQUIRED".
+8. Before stopping: VERIFY all mandatory/required fields (marked with * or "required") are filled. If any mandatory field is empty and you cannot determine the answer, fill it with a reasonable default from the applicant data or "Not applicable".
+9. CRITICAL: After filling ALL fields on ALL pages, STOP. Do NOT click the final Submit/Apply button. Leave the form in a filled-but-not-submitted state.
+10. Return JSON:
    {
      "fieldsFilledCount": <number of fields filled>,
      "mandatoryFieldsCount": <number of mandatory fields found>,
@@ -68,8 +69,9 @@ INSTRUCTIONS:
 3. Fill the request using the provided user data.
 4. If the site asks for a profile/listing URL, search the page for the best matching field and populate it only if you can infer it from the current site. Otherwise leave it blank and mention it in notes.
 5. If there are checkboxes or confirmation prompts required to proceed, complete them.
-6. STOP before the final submit/remove button. Leave the request ready for user review.
-7. Return ONLY JSON:
+6. If the site requires login, account creation, email verification, CAPTCHA, or any other authentication gate before you can continue, STOP immediately and return readyToSubmit=false with notes exactly "LOGIN_REQUIRED".
+7. STOP before the final submit/remove button. Leave the request ready for user review.
+8. Return ONLY JSON:
 {
   "fieldsFilledCount": <number>,
   "mandatoryFieldsCount": <number>,
@@ -151,6 +153,20 @@ export interface ExtractAtsResult {
   company: string
 }
 
+function isLoginRequired(notes?: string): boolean {
+  if (!notes) return false
+  const normalized = notes.toLowerCase()
+  return (
+    normalized.includes("login_required") ||
+    normalized.includes("log in") ||
+    normalized.includes("login required") ||
+    normalized.includes("sign in") ||
+    normalized.includes("authentication") ||
+    normalized.includes("create account") ||
+    normalized.includes("captcha")
+  )
+}
+
 /**
  * Fills an ATS form using TinyFish STEALTH.
  * Does NOT click submit — leaves form in filled-but-not-submitted state.
@@ -196,6 +212,14 @@ export async function executeTinyFishForm({
   }
 
   if (!parsed.readyToSubmit) {
+    if (isLoginRequired(parsed.notes)) {
+      return {
+        url,
+        status: "skipped",
+        error: "Login required",
+        filledAt: new Date().toISOString(),
+      }
+    }
     return {
       url,
       status: "error",
@@ -247,6 +271,14 @@ export async function executeDataBrokerOptOut({
   }
 
   if (!parsed.readyToSubmit) {
+    if (isLoginRequired(parsed.notes)) {
+      return {
+        url,
+        status: "skipped",
+        error: "Login required",
+        filledAt: new Date().toISOString(),
+      }
+    }
     return {
       url,
       status: "error",

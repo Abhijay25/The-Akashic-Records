@@ -34,6 +34,8 @@ const STATUS_LABELS: Partial<Record<LibrarianJobStatus, string>> = {
   error: "Something went wrong",
 }
 
+const DEFAULT_LIBRARIAN_RESULTS = 3
+
 function getResultLabel(result: ExecutionResult): string {
   try {
     return result.jobTitle ?? result.company ?? new URL(result.url).hostname
