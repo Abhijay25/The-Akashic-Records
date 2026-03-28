@@ -4,9 +4,7 @@ import { usePort } from "@plasmohq/messaging/hook"
 import { Storage } from "@plasmohq/storage"
 import { useStorage } from "@plasmohq/storage/hook"
 import { STORAGE_KEYS } from "~types/constants"
-
-const localStore = new Storage({ area: "local" })
-import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
+import type { StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 import type { Book, Chapter } from "~types/book"
 
 type PortEvent = FeedProgressEvent | LibrarianProgressEvent
@@ -21,13 +19,13 @@ export default function LibraryView() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* History sidebar */}
-      <div className="w-[130px] shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-        <div className="px-3 pt-3 pb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-widest">
+      <div className="w-[130px] shrink-0 border-r border-brand-light flex flex-col overflow-hidden bg-brand-bg">
+        <div className="px-3 pt-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
           History
         </div>
         <div className="flex-1 overflow-y-auto">
           {!bookIds || bookIds.length === 0 ? (
-            <p className="px-3 py-2 text-[11px] text-gray-700">No searches yet</p>
+            <p className="px-3 py-2 text-[11px] text-gray-400">No searches yet</p>
           ) : (
             [...bookIds].reverse().map((id) => (
               <HistoryItem
@@ -41,14 +39,14 @@ export default function LibraryView() {
         </div>
         <button
           onClick={() => setActiveBookId(null)}
-          className="m-2 py-1.5 text-[11px] text-gray-600 hover:text-gray-400 border border-gray-800 rounded hover:border-gray-700 transition-colors"
+          className="m-2 py-1.5 text-[11px] text-gray-500 hover:text-black border border-brand-light hover:border-brand rounded transition-colors"
         >
           + New
         </button>
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-white">
         {activeBookId ? (
           <ActiveBook bookId={activeBookId} onNewSearch={() => setActiveBookId(null)} />
         ) : (
@@ -75,8 +73,8 @@ function HistoryItem({
       title={book?.prompt}
       className={`w-full text-left px-3 py-2 text-[11px] leading-tight transition-colors ${
         isActive
-          ? "bg-gray-800 text-gray-100"
-          : "text-gray-500 hover:text-gray-300 hover:bg-gray-900"
+          ? "bg-brand-light text-black font-medium"
+          : "text-gray-600 hover:text-black hover:bg-white"
       }`}
     >
       <span className="line-clamp-2">{book?.prompt ?? "..."}</span>
@@ -127,7 +125,7 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
   if (!book) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-gray-700 border-t-gray-400 rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-brand-light border-t-brand rounded-full animate-spin" />
       </div>
     )
   }
@@ -136,9 +134,9 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
     if (book.chapters.length === 0) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-          <p className="text-gray-400 text-sm text-center">No articles found</p>
-          <p className="text-[11px] text-gray-600 text-center">Try rephrasing your search</p>
-          <button onClick={onNewSearch} className="text-xs text-gray-500 hover:text-white transition-colors">
+          <p className="text-gray-600 text-sm text-center">No articles found</p>
+          <p className="text-[11px] text-gray-400 text-center">Try rephrasing your search</p>
+          <button onClick={onNewSearch} className="text-xs text-gray-400 hover:text-black transition-colors">
             Try again
           </button>
         </div>
@@ -150,10 +148,8 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
   if (status === "error") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-        <p className="text-red-400 text-sm text-center">
-          {isStuck ? "Search did not complete — try again" : (book.error ?? "Something went wrong")}
-        </p>
-        <button onClick={onNewSearch} className="text-xs text-gray-500 hover:text-white transition-colors">
+        <p className="text-red-500 text-sm text-center">{book.error ?? "Something went wrong"}</p>
+        <button onClick={onNewSearch} className="text-xs text-gray-400 hover:text-black transition-colors">
           Try a new search
         </button>
       </div>
@@ -169,15 +165,15 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
-      <div className="w-7 h-7 border-2 border-gray-700 border-t-white rounded-full animate-spin" />
+      <div className="w-7 h-7 border-2 border-brand-light border-t-brand rounded-full animate-spin" />
       <div className="text-center">
-        <p className="text-sm text-gray-200">{statusLabel[status ?? "idle"] ?? "Working..."}</p>
+        <p className="text-sm text-black">{statusLabel[status ?? "idle"] ?? "Working..."}</p>
         {chaptersCount > 0 && (
           <p className="text-[11px] text-gray-500 mt-1">
             {chaptersCount} article{chaptersCount !== 1 ? "s" : ""} found
           </p>
         )}
-        <p className="text-[10px] text-gray-700 mt-3 italic max-w-[200px] truncate">
+        <p className="text-[10px] text-gray-400 mt-3 italic max-w-[200px] truncate">
           "{book.prompt}"
         </p>
       </div>
@@ -221,8 +217,8 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-5 gap-4">
       <div className="text-center">
-        <p className="text-sm font-medium text-gray-200">What do you want to read?</p>
-        <p className="text-[11px] text-gray-600 mt-1">Get the top articles on any topic</p>
+        <p className="text-sm font-medium text-black">What do you want to read?</p>
+        <p className="text-[11px] text-gray-500 mt-1">Get the top articles on any topic</p>
       </div>
       <textarea
         value={prompt}
@@ -235,13 +231,13 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
         }}
         placeholder={"e.g. latest news on US-Iran relations\ne.g. Shopee internship openings"}
         disabled={isLoading}
-        className="w-full h-28 bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-700 resize-none focus:outline-none focus:border-gray-600 transition-colors"
+        className="w-full h-28 bg-brand-bg border border-brand-light rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-brand transition-colors"
       />
-      {error && <p className="text-red-400 text-xs w-full">{error}</p>}
+      {error && <p className="text-red-500 text-xs w-full">{error}</p>}
       <button
         onClick={submit}
         disabled={!prompt.trim() || isLoading}
-        className="w-full py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         {isLoading ? "Starting..." : "Search"}
       </button>
@@ -252,16 +248,16 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
 function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => void }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-brand-light shrink-0">
         <span className="text-[11px] text-gray-500">{book.chapters.length} articles</span>
         <button
           onClick={onNewSearch}
-          className="text-[11px] text-gray-500 hover:text-white transition-colors"
+          className="text-[11px] text-gray-500 hover:text-black transition-colors"
         >
           New search
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-900">
+      <div className="flex-1 overflow-y-auto divide-y divide-brand-bg">
         {book.chapters.map((chapter, i) => (
           <ArticleCard key={chapter.id} entry={chapter} index={i + 1} />
         ))}
@@ -288,20 +284,20 @@ function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
   return (
     <button
       onClick={() => chrome.tabs.create({ url: entry.sourceUrl })}
-      className="w-full text-left p-3 hover:bg-gray-900 transition-colors group"
+      className="w-full text-left p-3 hover:bg-brand-bg transition-colors group"
     >
       <div className="flex gap-2">
-        <span className="text-[10px] text-gray-700 font-mono mt-0.5 shrink-0 w-4">{index}</span>
+        <span className="text-[10px] text-brand font-mono mt-0.5 shrink-0 w-4">{index}</span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-gray-200 group-hover:text-white leading-snug line-clamp-2">
+          <p className="text-xs font-medium text-black leading-snug line-clamp-2">
             {entry.title}
           </p>
-          <p className="text-[11px] text-gray-600 mt-1 leading-relaxed line-clamp-2">
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed line-clamp-2">
             {summary}…
           </p>
-          <p className="text-[10px] text-gray-700 mt-1 truncate">{hostname}</p>
+          <p className="text-[10px] text-gray-400 mt-1 truncate">{hostname}</p>
         </div>
-        <span className="text-gray-700 text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+        <span className="text-brand text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
           ↗
         </span>
       </div>

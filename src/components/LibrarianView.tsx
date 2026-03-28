@@ -4,9 +4,7 @@ import { usePort } from "@plasmohq/messaging/hook"
 import { Storage } from "@plasmohq/storage"
 import { useStorage } from "@plasmohq/storage/hook"
 import type {
-  StartLibrarianRequest,
   StartLibrarianResponse,
-  ApproveSubmitRequest,
   ApproveSubmitResponse,
   LibrarianProgressEvent,
   FeedProgressEvent,
@@ -187,12 +185,12 @@ export default function LibrarianView() {
   }
 
   return (
-    <div className="flex flex-col h-full p-4 gap-4 overflow-hidden">
+    <div className="flex flex-col h-full p-4 gap-4 overflow-hidden bg-white">
       {phase === "idle" && (
         <>
           <div className="text-center mt-2">
-            <p className="text-sm font-medium text-gray-200">What do you need done?</p>
-            <p className="text-[11px] text-gray-600 mt-1">
+            <p className="text-sm font-medium text-black">What do you need done?</p>
+            <p className="text-[11px] text-gray-500 mt-1">
               Describe a task and the Librarian will handle it for you
             </p>
           </div>
@@ -202,12 +200,25 @@ export default function LibrarianView() {
             placeholder={
               "e.g. Apply to Google, Meta, and Shopee internship listings\n\ne.g. Find all software engineering roles posted this week"
             }
-            className="flex-1 bg-gray-900 border border-gray-800 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-700 resize-none focus:outline-none focus:border-gray-600 transition-colors"
+            className="flex-1 bg-brand-bg border border-brand-light rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-brand transition-colors"
           />
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-400 uppercase tracking-widest">
+              Vault passphrase
+            </label>
+            <input
+              type="password"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
+              placeholder="Enter your passphrase"
+              className="w-full bg-brand-bg border border-brand-light rounded-lg px-3 py-2 text-sm text-black placeholder-gray-400 focus:outline-none focus:border-brand transition-colors"
+            />
+          </div>
           <button
             onClick={handleSubmit}
-            disabled={!prompt.trim()}
-            className="w-full py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            disabled={!prompt.trim() || !passphrase.trim()}
+            className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Let Librarian handle it
           </button>
@@ -217,26 +228,26 @@ export default function LibrarianView() {
       {phase === "running" && (
         <>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-4 h-4 border-2 border-gray-600 border-t-white rounded-full animate-spin shrink-0" />
+            <div className="w-4 h-4 border-2 border-brand-light border-t-brand rounded-full animate-spin shrink-0" />
             <div className="min-w-0">
-              <p className="text-xs text-gray-300 truncate">
+              <p className="text-xs text-black truncate">
                 {STATUS_LABELS[latestEvent?.status ?? "idle"]}
               </p>
               {latestEvent && latestEvent.totalCount > 0 && (
-                <p className="text-[10px] text-gray-600">
+                <p className="text-[10px] text-gray-500">
                   {latestEvent.completedCount} / {latestEvent.totalCount}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-gray-900 rounded-lg p-3 font-mono text-[11px] space-y-2">
+          <div className="flex-1 overflow-y-auto bg-brand-bg rounded-lg p-3 font-mono text-[11px] space-y-2 border border-brand-light">
             {stepLog.map((step, i) => (
               <div key={i} className="flex items-start gap-2">
-                <span className={`shrink-0 mt-px ${i < stepLog.length - 1 ? "text-green-500" : "text-gray-400"}`}>
+                <span className={`shrink-0 mt-px ${i < stepLog.length - 1 ? "text-brand" : "text-gray-400"}`}>
                   {i < stepLog.length - 1 ? "✓" : ">"}
                 </span>
-                <span className={i < stepLog.length - 1 ? "text-gray-600" : "text-gray-200"}>
+                <span className={i < stepLog.length - 1 ? "text-gray-400" : "text-black"}>
                   {step}
                 </span>
               </div>
@@ -245,7 +256,7 @@ export default function LibrarianView() {
               {[0, 150, 300].map((delay) => (
                 <span
                   key={delay}
-                  className="w-1.5 h-1.5 bg-gray-600 rounded-full animate-bounce"
+                  className="w-1.5 h-1.5 bg-brand-light rounded-full animate-bounce"
                   style={{ animationDelay: `${delay}ms` }}
                 />
               ))}
@@ -258,8 +269,8 @@ export default function LibrarianView() {
       {phase === "hitl" && latestEvent && (
         <>
           <div className="shrink-0">
-            <p className="text-sm font-medium text-gray-200">Review before submitting</p>
-            <p className="text-[11px] text-gray-600 mt-1">
+            <p className="text-sm font-medium text-black">Review before submitting</p>
+            <p className="text-[11px] text-gray-500 mt-1">
               The Librarian filled these out. Uncheck any you want to skip.
             </p>
           </div>
@@ -286,14 +297,14 @@ export default function LibrarianView() {
           <div className="flex gap-2 shrink-0">
             <button
               onClick={reset}
-              className="flex-1 py-2 text-sm text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
+              className="flex-1 py-2 text-sm text-gray-500 hover:text-black border border-brand-light hover:border-brand rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleApprove}
               disabled={approvedUrls.size === 0}
-              className="flex-1 py-2 text-sm font-semibold bg-white text-gray-900 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 py-2 text-sm font-semibold bg-brand text-white hover:bg-brand-light hover:text-black rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               Submit {approvedUrls.size > 0 ? `(${approvedUrls.size})` : ""}
             </button>
@@ -303,31 +314,31 @@ export default function LibrarianView() {
 
       {phase === "done" && latestEvent && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center text-2xl">
+          <div className="w-14 h-14 rounded-full bg-brand-bg border-2 border-brand-light flex items-center justify-center text-2xl text-brand">
             ✓
           </div>
           <div className="text-center">
-            <p className="text-base font-semibold text-white">Task done!</p>
-            <p className="text-[11px] text-gray-600 mt-1 max-w-[230px] mx-auto">
+            <p className="text-base font-semibold text-black">Task done!</p>
+            <p className="text-[11px] text-gray-500 mt-1 max-w-[230px] mx-auto">
               {latestEvent.completedCount} of {latestEvent.totalCount} submitted successfully
             </p>
           </div>
 
-          <div className="w-full bg-gray-900 rounded-lg p-3 space-y-2 max-h-44 overflow-y-auto">
+          <div className="w-full bg-brand-bg border border-brand-light rounded-lg p-3 space-y-2 max-h-44 overflow-y-auto">
             {latestEvent.results.map((r) => (
               <div key={r.url} className="flex items-start gap-2 text-[11px]">
                 <span className={
-                  r.status === "submitted" ? "text-green-500 shrink-0" :
-                  r.status === "error" ? "text-red-400 shrink-0" :
-                  "text-gray-600 shrink-0"
+                  r.status === "submitted" ? "text-brand shrink-0" :
+                  r.status === "error" ? "text-red-500 shrink-0" :
+                  "text-gray-400 shrink-0"
                 }>
                   {r.status === "submitted" ? "✓" : r.status === "error" ? "✗" : "—"}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-gray-300 truncate">
+                  <p className="text-black truncate">
                     {r.jobTitle ?? r.company ?? new URL(r.url).hostname}
                   </p>
-                  {r.error && <p className="text-red-400 truncate">{r.error}</p>}
+                  {r.error && <p className="text-red-500 truncate">{r.error}</p>}
                 </div>
               </div>
             ))}
@@ -335,7 +346,7 @@ export default function LibrarianView() {
 
           <button
             onClick={reset}
-            className="w-full py-2.5 bg-white text-gray-900 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+            className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black transition-colors"
           >
             New task
           </button>
@@ -344,8 +355,8 @@ export default function LibrarianView() {
 
       {phase === "error" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 p-4">
-          <p className="text-red-400 text-sm text-center">{error}</p>
-          <button onClick={reset} className="text-xs text-gray-500 hover:text-white transition-colors">
+          <p className="text-red-500 text-sm text-center">{error}</p>
+          <button onClick={reset} className="text-xs text-gray-400 hover:text-black transition-colors">
             Try again
           </button>
         </div>
@@ -368,19 +379,19 @@ function HitlItem({
   })()
 
   return (
-    <label className="flex items-start gap-3 p-2.5 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors">
+    <label className="flex items-start gap-3 p-2.5 bg-brand-bg border border-brand-light rounded-lg cursor-pointer hover:border-brand transition-colors">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onToggle(result.url, e.target.checked)}
-        className="mt-0.5 shrink-0 accent-white"
+        className="mt-0.5 shrink-0 accent-brand"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-gray-200 font-medium truncate">
+        <p className="text-xs text-black font-medium truncate">
           {result.jobTitle ?? "Untitled role"}
           {result.company && <span className="text-gray-500 font-normal"> · {result.company}</span>}
         </p>
-        <p className="text-[10px] text-gray-600 truncate mt-0.5">{hostname}</p>
+        <p className="text-[10px] text-gray-400 truncate mt-0.5">{hostname}</p>
       </div>
     </label>
   )
