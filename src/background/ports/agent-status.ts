@@ -1,13 +1,34 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
+import type { FeedProgressEvent } from "~types/messages"
 
-// This port handler is registered so Plasmo recognizes "agent-status" as a valid port.
-// Actual message pushing happens in start-feed.ts via chrome.runtime.onConnect.
-// The port stays open as long as the popup is open; background pushes FeedProgressEvents.
+/**
+ * Registry of active push functions, one per connected popup instance.
+ * Keyed by a random ID assigned on connect so we can remove on disconnect.
+ *
+ * start-feed.ts calls broadcastProgress() which fans out to all active ports.
+ * This works because all background modules share the same service worker scope.
+ */
+const activeSenders = new Map<string, (event: FeedProgressEvent) => void>()
 
-const handler: PlasmoMessaging.PortHandler = async (req, res) => {
-  // Keep the port open — background pushes to it, this handler doesn't need to send.
-  // Plasmo will call this when a message arrives on the port (client → background direction).
-  // We don't expect inbound messages on this port.
+export function broadcastProgress(event: FeedProgressEvent): void {
+  for (const send of activeSenders.values()) {
+    send(event)
+  }
+}
+
+const handler: PlasmoMessaging.PortHandler<never, FeedProgressEvent> = async (
+  req,
+  res
+) => {
+  const id = crypto.randomUUID()
+  activeSenders.set(id, (event) => res.send(event))
+
+  // Clean up when the port disconnects (popup closes or navigates away)
+  req.port.onDisconnect.addListener(() => {
+    activeSenders.delete(id)
+  })
+
+  // Port stays open — background pushes events, popup never sends on this port
 }
 
 export default handler

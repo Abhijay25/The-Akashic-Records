@@ -15,6 +15,6 @@ export interface FeedProgressEvent {
   type: "feed-progress"
   bookId: string
   status: BookStatus
-  entriesCount: number
+  chaptersCount: number
   message?: string
 }

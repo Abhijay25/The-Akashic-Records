@@ -1,6 +1,6 @@
 export const STORAGE_KEYS = {
   BOOK_INDEX: "books:index",
-  BOOK_PREFIX: "books:entry:"
+  BOOK_PREFIX: "books:chapter:"
 } as const
 
 export const PORT_NAMES = {

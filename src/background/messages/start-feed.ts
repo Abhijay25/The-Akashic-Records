@@ -1,34 +1,13 @@
 import type { PlasmoMessaging } from "@plasmohq/messaging"
 import { runThreatSentry } from "~agents/threat-sentry"
 import { FeedConfigSchema } from "~types/book"
-import { PORT_NAMES } from "~types/constants"
-import type { StartFeedRequest, StartFeedResponse, FeedProgressEvent } from "~types/messages"
+import { broadcastProgress } from "~background/ports/agent-status"
+import type { StartFeedRequest, StartFeedResponse } from "~types/messages"
 
-// Active ports indexed by portId (Plasmo manages port lifecycle)
-const activePorts = new Map<string, chrome.runtime.Port>()
-
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === PORT_NAMES.AGENT_STATUS) {
-    const portId = Math.random().toString(36).slice(2)
-    activePorts.set(portId, port)
-    port.onDisconnect.addListener(() => activePorts.delete(portId))
-  }
-})
-
-function broadcastProgress(event: FeedProgressEvent): void {
-  for (const port of activePorts.values()) {
-    try {
-      port.postMessage(event)
-    } catch {
-      // Port may have disconnected between check and send; ignore
-    }
-  }
-}
-
-const handler: PlasmoMessaging.MessageHandler<StartFeedRequest, StartFeedResponse> = async (
-  req,
-  res
-) => {
+const handler: PlasmoMessaging.MessageHandler<
+  StartFeedRequest,
+  StartFeedResponse
+> = async (req, res) => {
   const body = req.body
 
   if (!body?.config) {
@@ -45,48 +24,42 @@ const handler: PlasmoMessaging.MessageHandler<StartFeedRequest, StartFeedRespons
   const config = parseResult.data
   let bookId = ""
 
-  try {
-    // Kick off the pipeline; send bookId back immediately via the first progress event
-    // We run async and return the bookId right away so the popup doesn't hang
+  // Wait for the first progress event to get the bookId, then return it
+  // immediately so the popup can show a loading state. Pipeline continues async.
+  await new Promise<void>((resolve) => {
+    let resolved = false
+
     const bookPromise = runThreatSentry(config, (event) => {
-      if (!bookId) bookId = event.bookId
       broadcastProgress(event)
-    })
-
-    // Wait briefly for the book ID to be set by the first progress emit
-    await new Promise<void>((resolve) => {
-      const poll = setInterval(() => {
-        if (bookId) {
-          clearInterval(poll)
-          resolve()
-        }
-      }, 10)
-      // Safety timeout: if no progress in 2s, generate an ID ourselves
-      setTimeout(() => {
-        clearInterval(poll)
+      if (!resolved) {
+        bookId = event.bookId
+        resolved = true
         resolve()
-      }, 2000)
+      }
     })
 
-    // Don't await bookPromise here — let it run in background
+    // Safety fallback: if the first progress event takes >3s, unblock anyway
+    setTimeout(resolve, 3000)
+
     bookPromise.catch((err) => {
-      console.error("[start-feed] pipeline failed:", err)
+      console.error("[start-feed] pipeline error:", err)
       if (bookId) {
         broadcastProgress({
           type: "feed-progress",
           bookId,
           status: "error",
-          entriesCount: 0,
+          chaptersCount: 0,
           message: String(err)
         })
       }
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
     })
+  })
 
-    res.send({ bookId })
-  } catch (err) {
-    console.error("[start-feed] handler error:", err)
-    res.send({ bookId: "", error: String(err) })
-  }
+  res.send({ bookId })
 }
 
 export default handler
