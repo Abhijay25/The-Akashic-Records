@@ -1,10 +1,14 @@
 import { useState } from "react"
 import { sendToBackground } from "@plasmohq/messaging"
 import { usePort } from "@plasmohq/messaging/hook"
+import { Storage } from "@plasmohq/storage"
 import { useStorage } from "@plasmohq/storage/hook"
 import { STORAGE_KEYS } from "~types/constants"
 import type { StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 import type { Book, Chapter } from "~types/book"
+
+const localStore = new Storage({ area: "local" })
+const DEFAULT_LIBRARY_RESULTS = 8
 
 type PortEvent = FeedProgressEvent | LibrarianProgressEvent
 // Cast needed until `plasmo dev` generates PortsMetadata types
@@ -13,7 +17,7 @@ const useAgentPort = () =>
 
 export default function LibraryView() {
   const [activeBookId, setActiveBookId] = useState<string | null>(null)
-  const [bookIds] = useStorage<string[]>(STORAGE_KEYS.BOOK_INDEX, [])
+  const [bookIds] = useStorage<string[]>({ key: STORAGE_KEYS.BOOK_INDEX, instance: localStore }, [])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -65,7 +69,7 @@ function HistoryItem({
   isActive: boolean
   onClick: () => void
 }) {
-  const [book] = useStorage<Book>(`${STORAGE_KEYS.BOOK_PREFIX}${bookId}`)
+  const [book] = useStorage<Book>({ key: `${STORAGE_KEYS.BOOK_PREFIX}${bookId}`, instance: localStore })
   return (
     <button
       onClick={onClick}
@@ -82,13 +86,43 @@ function HistoryItem({
 }
 
 function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () => void }) {
-  const [book] = useStorage<Book>(`${STORAGE_KEYS.BOOK_PREFIX}${bookId}`)
+  const [book] = useStorage<Book>({ key: `${STORAGE_KEYS.BOOK_PREFIX}${bookId}`, instance: localStore })
+  const [storedFeedEvent] = useStorage<FeedProgressEvent>({
+    key: `${STORAGE_KEYS.FEED_PROGRESS_PREFIX}${bookId}`,
+    instance: localStore,
+  })
   const port = useAgentPort()
 
   const raw = port.data
-  const feedEvent = raw?.type === "feed-progress" && raw.bookId === bookId ? raw : null
+  // Only use live port events for the active in-progress book — never override a stored "done" state
+  // Only use live port events while the book is actively in-progress.
+  // Never override a terminal state ("done" or "error") stored in chrome.storage.
+  const terminalStatuses = new Set(["done", "error"])
+  const liveFeedEvent =
+    raw?.type === "feed-progress" && raw.bookId === bookId && !terminalStatuses.has(book?.status ?? "")
+      ? raw
+      : null
+  const feedEvent =
+    liveFeedEvent ??
+    (storedFeedEvent?.type === "feed-progress" && storedFeedEvent.bookId === bookId
+      ? storedFeedEvent
+      : null)
 
-  const status = feedEvent?.status ?? book?.status
+  // If there's no live event and the book is stuck in an intermediate state,
+  // treat it as "done" if it has chapters, or "error" if it has none.
+  // Only applies to books that are at least 2 minutes old (not a fresh run).
+  const intermediateStatuses = new Set(["idle", "scouting", "scraping", "parsing"])
+  const bookAgeMs = book ? Date.now() - new Date(book.updatedAt).getTime() : 0
+  const isStuck =
+    !liveFeedEvent &&
+    book &&
+    intermediateStatuses.has(book.status) &&
+    bookAgeMs > 120_000
+  const effectiveStatus = isStuck
+    ? (book.chapters.length > 0 ? "done" : "error")
+    : (feedEvent?.status ?? book?.status)
+
+  const status = effectiveStatus
   const chaptersCount = feedEvent?.chaptersCount ?? book?.chapters?.length ?? 0
 
   if (!book) {
@@ -160,19 +194,25 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
     setIsLoading(true)
     setError(null)
     try {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Service worker timed out — reload the extension and try again.")), 8000)
+      )
       // Cast needed until `plasmo dev` generates MessagesMetadata types
-      const res = (await (sendToBackground as Function)({
-        name: "start-feed",
-        body: { config: { prompt: prompt.trim(), maxResults: 10, browserProfile: "lite" } },
-      })) as StartFeedResponse
-      if (res.error) {
-        setError(res.error)
+      const res = (await Promise.race([
+        (sendToBackground as Function)({
+          name: "start-feed",
+          body: { config: { prompt: prompt.trim(), maxResults: DEFAULT_LIBRARY_RESULTS, browserProfile: "lite" } },
+        }),
+        timeout,
+      ])) as StartFeedResponse
+      if (res.error || !res.bookId) {
+        setError(res.error ?? "Failed to start search.")
         setIsLoading(false)
       } else {
         onBookCreated(res.bookId)
       }
-    } catch {
-      setError("Failed to start search. Check your API keys.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start search. Check your API keys.")
       setIsLoading(false)
     }
   }
@@ -222,14 +262,14 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-brand-bg">
         {book.chapters.map((chapter, i) => (
-          <ArticleCard key={chapter.id} entry={chapter} index={i + 1} />
+          <ArticleCard key={chapter.id} bookId={book.id} entry={chapter} index={i + 1} />
         ))}
       </div>
     </div>
   )
 }
 
-function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
+function ArticleCard({ bookId, entry, index }: { bookId: string; entry: Chapter; index: number }) {
   const summary = entry.content
     .replace(/#{1,6}\s/g, "")
     .replace(/[*`_[\]]/g, "")
@@ -246,7 +286,11 @@ function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
 
   return (
     <button
-      onClick={() => chrome.tabs.create({ url: entry.sourceUrl })}
+      onClick={() =>
+        chrome.tabs.create({
+          url: chrome.runtime.getURL(`tabs/reader.html?bookId=${encodeURIComponent(bookId)}&entryId=${encodeURIComponent(entry.id)}`),
+        })
+      }
       className="w-full text-left p-3 hover:bg-brand-bg transition-colors group"
     >
       <div className="flex gap-2">

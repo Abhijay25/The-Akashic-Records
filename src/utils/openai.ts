@@ -7,6 +7,20 @@ const client = new OpenAI({
 
 const KEYWORD_SYSTEM_PROMPT = `You are a search query generator. Given a natural language topic, produce 2-3 precise web search queries that would surface recent, authoritative content on that topic.
 
+If the user mentions a specific platform or website, append the appropriate site: operator to ALL generated queries.
+Common mappings:
+- Reddit → site:reddit.com
+- Twitter / X / tweets → site:twitter.com
+- LinkedIn (posts/people, not jobs) → site:linkedin.com
+- GitHub → site:github.com
+- Hacker News / HN → site:news.ycombinator.com
+- YouTube → site:youtube.com
+- Stack Overflow → site:stackoverflow.com
+- Product Hunt → site:producthunt.com
+
+Example: "find Reddit posts about Rust async" →
+{"queries": ["Rust async site:reddit.com", "Rust async runtime site:reddit.com"]}
+
 Return ONLY a JSON object with a "queries" array of strings. Example:
 {"queries": ["query one", "query two", "query three"]}`
 
@@ -22,6 +36,8 @@ export async function extractKeywords(prompt: string): Promise<string[]> {
     ],
     response_format: { type: "json_object" },
     temperature: 0.3
+  }, {
+    timeout: 15000,
   })
 
   const raw = completion.choices[0]?.message?.content ?? "{}"
@@ -63,6 +79,8 @@ export async function llmA_parse(
       ],
       response_format: { type: "json_object" },
       temperature: 0.1
+    }, {
+      timeout: 30000,
     })
 
     return completion.choices[0]?.message?.content ?? null

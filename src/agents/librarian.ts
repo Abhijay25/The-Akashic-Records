@@ -1,14 +1,15 @@
 import { Storage } from "@plasmohq/storage"
 import { tavilyScout } from "~utils/tavily"
 import { filterBlacklisted } from "~utils/blacklist"
-import { vaultRetrieve, VaultLockedError } from "~utils/vault"
-import { extractAtsLink, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
+import { KNOWN_DATA_BROKERS, MOCK_PERSONA, getKnownBrokerName, isDigitalGhostPrompt } from "~types/librarian"
+import { extractAtsLink, executeDataBrokerOptOut, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
 import { STORAGE_KEYS } from "~types/constants"
 import { LibrarianJobSchema } from "~types/librarian"
 import type {
   TaskPayload,
   LibrarianJob,
   ExecutionResult,
+  UserPersona,
 } from "~types/librarian"
 import type { LibrarianProgressEvent } from "~types/messages"
 
@@ -28,6 +29,10 @@ async function persistJob(job: LibrarianJob): Promise<void> {
   if (!index.includes(job.id)) {
     await storage.set(STORAGE_KEYS.LIBRARIAN_JOBS_INDEX, [...index, job.id])
   }
+}
+
+async function persistProgress(event: LibrarianProgressEvent): Promise<void> {
+  await storage.set(STORAGE_KEYS.LIBRARIAN_PROGRESS_PREFIX + event.jobId, event)
 }
 
 // ── Batch Processing ─────────────────────────────────────────────────────────
@@ -60,9 +65,8 @@ async function batchProcess<T, R>(
  */
 export async function runLibrarian(
   payload: TaskPayload,
-  passphrase: string,
   onProgress: ProgressCallback,
-  options: { requireHitl: boolean } = { requireHitl: false }
+  options: { requireHitl: boolean; persona?: UserPersona } = { requireHitl: false }
 ): Promise<LibrarianJob> {
   const now = new Date().toISOString()
 
@@ -84,7 +88,7 @@ export async function runLibrarian(
     const { message, ...jobUpdate } = update
     job = { ...job, ...jobUpdate, updatedAt: new Date().toISOString() }
     await persistJob(job)
-    onProgress({
+    const event: LibrarianProgressEvent = {
       type: "librarian-progress",
       jobId: job.id,
       status: job.status,
@@ -94,31 +98,32 @@ export async function runLibrarian(
       totalCount: job.results.length,
       results: job.results,
       message,
-    })
+    }
+    await persistProgress(event)
+    onProgress(event)
   }
 
   // Emit initial event so callers get the jobId immediately
   await emit({ status: "idle", message: "Starting Librarian…" })
 
-  // ── Phase 1: Vault Unlock ─────────────────────────────────────────────────
-
-  let persona
-  try {
-    persona = await vaultRetrieve(passphrase)
-  } catch (err) {
-    const message =
-      err instanceof VaultLockedError
-        ? "Incorrect passphrase — vault locked"
-        : "Failed to retrieve persona from vault"
-    await emit({ status: "error", error: message, message })
-    return job
-  }
+  const persona = options.persona ?? MOCK_PERSONA
+  const isDigitalGhost = payload.type === "AD_HOC_PROMPT" && isDigitalGhostPrompt(payload.prompt)
 
   // ── Phase 2 (Mode A only): Scout LinkedIn ────────────────────────────────
 
   let atsUrls: string[] = []
 
-  if (payload.type === "AD_HOC_PROMPT") {
+  if (isDigitalGhost) {
+    const maxResults = Math.min(payload.maxResults, KNOWN_DATA_BROKERS.length)
+    const selectedBrokers = KNOWN_DATA_BROKERS.slice(0, maxResults)
+
+    await emit({
+      status: "scouting",
+      message: `Finding ${selectedBrokers.length} data broker opt-out flow${selectedBrokers.length === 1 ? "" : "s"}…`,
+    })
+
+    atsUrls = selectedBrokers.map((broker) => broker.url)
+  } else if (payload.type === "AD_HOC_PROMPT") {
     await emit({
       status: "scouting",
       message: `Searching for "${payload.prompt}"…`,
@@ -159,7 +164,7 @@ export async function runLibrarian(
       scoutResults,
       SCRAPE_BATCH_SIZE,
       async (result, index) => {
-        onProgress({
+        const progressEvent: LibrarianProgressEvent = {
           type: "librarian-progress",
           jobId: job.id,
           status: "extracting",
@@ -167,7 +172,9 @@ export async function runLibrarian(
           totalCount: scoutResults.length,
           results: job.results,
           message: `Extracting ATS link ${index + 1} of ${scoutResults.length}…`,
-        })
+        }
+        await persistProgress(progressEvent)
+        onProgress(progressEvent)
         try {
           return await extractAtsLink(result.url)
         } catch (err) {
@@ -217,25 +224,55 @@ export async function runLibrarian(
   await emit({
     status: "executing",
     results: [],
-    message: `Filling ${allowed.length} application form${allowed.length === 1 ? "" : "s"}…`,
+    message: isDigitalGhost
+      ? `Preparing ${allowed.length} broker removal request${allowed.length === 1 ? "" : "s"}…`
+      : `Filling ${allowed.length} application form${allowed.length === 1 ? "" : "s"}…`,
   })
 
   for (let i = 0; i < allowed.length; i++) {
     const url = allowed[i]
+    const targetLabel = isDigitalGhost
+      ? (getKnownBrokerName(url) ?? new URL(url).hostname)
+      : new URL(url).hostname
 
-    onProgress({
+    const progressEvent: LibrarianProgressEvent = {
       type: "librarian-progress",
       jobId: job.id,
       status: "executing",
       completedCount: i,
       totalCount: allowed.length,
       results: job.results,
-      message: `Filling form ${i + 1} of ${allowed.length}…`,
-    })
+      message: isDigitalGhost
+        ? `Preparing ${targetLabel} opt-out request (${i + 1} of ${allowed.length})…`
+        : `Filling form ${i + 1} of ${allowed.length} on ${targetLabel}…`,
+    }
+    await persistProgress(progressEvent)
+    onProgress(progressEvent)
+
+    const handleExecutionProgress = async (message: string) => {
+      job = {
+        ...job,
+        updatedAt: new Date().toISOString(),
+      }
+      await persistJob(job)
+      const detailEvent: LibrarianProgressEvent = {
+        type: "librarian-progress",
+        jobId: job.id,
+        status: "executing",
+        completedCount: i,
+        totalCount: allowed.length,
+        results: job.results,
+        message: `[TinyFish] ${message}`,
+      }
+      await persistProgress(detailEvent)
+      onProgress(detailEvent)
+    }
 
     let result: ExecutionResult
     try {
-      result = await executeTinyFishForm({ url, persona })
+      result = isDigitalGhost
+        ? await executeDataBrokerOptOut({ url, persona, onProgress: handleExecutionProgress })
+        : await executeTinyFishForm({ url, persona, onProgress: handleExecutionProgress })
     } catch (err) {
       result = {
         url,
@@ -260,14 +297,21 @@ export async function runLibrarian(
   if (filledCount === 0) {
     await emit({
       status: "done",
-      message: `All ${errorCount} application${errorCount === 1 ? "" : "s"} failed`,
+      message: isDigitalGhost
+        ? `All ${errorCount} broker request${errorCount === 1 ? "" : "s"} failed`
+        : `All ${errorCount} application${errorCount === 1 ? "" : "s"} failed`,
     })
     return job
   }
 
   if (!options.requireHitl) {
     // Auto-submit all filled forms without pausing
-    await emit({ status: "submitting", message: `Submitting ${filledCount} application${filledCount === 1 ? "" : "s"}…` })
+    await emit({
+      status: "submitting",
+      message: isDigitalGhost
+        ? `Submitting ${filledCount} broker removal request${filledCount === 1 ? "" : "s"}…`
+        : `Submitting ${filledCount} application${filledCount === 1 ? "" : "s"}…`,
+    })
     for (const result of job.results.filter((r) => r.status === "filled")) {
       let submitResult: ExecutionResult
       try {
@@ -283,12 +327,19 @@ export async function runLibrarian(
       await persistJob(job)
     }
     const submittedCount = job.results.filter((r) => r.status === "submitted").length
-    await emit({ status: "done", message: `Done — ${submittedCount} application${submittedCount === 1 ? "" : "s"} submitted` })
+    await emit({
+      status: "done",
+      message: isDigitalGhost
+        ? `Done — ${submittedCount} broker request${submittedCount === 1 ? "" : "s"} submitted`
+        : `Done — ${submittedCount} application${submittedCount === 1 ? "" : "s"} submitted`,
+    })
   } else {
     // HITL mode: pause and wait for approve-submit
     await emit({
       status: "awaiting_approval",
-      message: `${filledCount} form${filledCount === 1 ? "" : "s"} filled — review and approve to submit`,
+      message: isDigitalGhost
+        ? `${filledCount} broker request${filledCount === 1 ? "" : "s"} ready — review and approve to submit`
+        : `${filledCount} form${filledCount === 1 ? "" : "s"} filled — review and approve to submit`,
     })
   }
 
