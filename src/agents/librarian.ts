@@ -1,7 +1,7 @@
 import { Storage } from "@plasmohq/storage"
 import { tavilyScout } from "~utils/tavily"
 import { filterBlacklisted } from "~utils/blacklist"
-import { KNOWN_DATA_BROKERS, MOCK_PERSONA, isDigitalGhostPrompt } from "~types/librarian"
+import { KNOWN_DATA_BROKERS, MOCK_PERSONA, getKnownBrokerName, isDigitalGhostPrompt } from "~types/librarian"
 import { extractAtsLink, executeDataBrokerOptOut, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
 import { STORAGE_KEYS } from "~types/constants"
 import { LibrarianJobSchema } from "~types/librarian"
@@ -231,6 +231,9 @@ export async function runLibrarian(
 
   for (let i = 0; i < allowed.length; i++) {
     const url = allowed[i]
+    const targetLabel = isDigitalGhost
+      ? (getKnownBrokerName(url) ?? new URL(url).hostname)
+      : new URL(url).hostname
 
     const progressEvent: LibrarianProgressEvent = {
       type: "librarian-progress",
@@ -240,8 +243,8 @@ export async function runLibrarian(
       totalCount: allowed.length,
       results: job.results,
       message: isDigitalGhost
-        ? `Preparing broker request ${i + 1} of ${allowed.length}…`
-        : `Filling form ${i + 1} of ${allowed.length}…`,
+        ? `Preparing ${targetLabel} opt-out request (${i + 1} of ${allowed.length})…`
+        : `Filling form ${i + 1} of ${allowed.length} on ${targetLabel}…`,
     }
     await persistProgress(progressEvent)
     onProgress(progressEvent)

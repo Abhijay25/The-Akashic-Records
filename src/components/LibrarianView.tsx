@@ -10,14 +10,16 @@ import type {
   FeedProgressEvent,
 } from "~types/messages"
 import { STORAGE_KEYS } from "~types/constants"
+import { isDigitalGhostPrompt } from "~types/librarian"
 import type { ExecutionResult, LibrarianJob, LibrarianJobStatus } from "~types/librarian"
 
 type PortEvent = FeedProgressEvent | LibrarianProgressEvent
-// Cast needed until `plasmo dev` generates PortsMetadata types
+
 const useAgentPort = () =>
   (usePort as (name: string) => { data?: PortEvent })("agent-status")
 
 const localStore = new Storage({ area: "local" })
+const DEFAULT_LIBRARIAN_RESULTS = 3
 
 type Phase = "idle" | "running" | "hitl" | "done" | "error"
 
@@ -30,6 +32,14 @@ const STATUS_LABELS: Partial<Record<LibrarianJobStatus, string>> = {
   submitting: "Submitting approved applications...",
   done: "All done!",
   error: "Something went wrong",
+}
+
+function getResultLabel(result: ExecutionResult): string {
+  try {
+    return result.jobTitle ?? result.company ?? new URL(result.url).hostname
+  } catch {
+    return result.jobTitle ?? result.company ?? result.url
+  }
 }
 
 export default function LibrarianView() {
@@ -51,7 +61,15 @@ export default function LibrarianView() {
     instance: localStore,
   })
 
-  // Update step log and phase from port events
+  const effectiveEvent =
+    storedEvent?.type === "librarian-progress" && storedEvent.jobId === jobId
+      ? storedEvent
+      : latestEvent
+
+  const isDigitalGhost =
+    storedJob?.payload.type === "AD_HOC_PROMPT" &&
+    isDigitalGhostPrompt(storedJob.payload.prompt)
+
   useEffect(() => {
     const raw = port.data
     if (!raw || raw.type !== "librarian-progress") return
@@ -62,7 +80,7 @@ export default function LibrarianView() {
     if (raw.message) {
       setStepLog((prev) => {
         if (prev[prev.length - 1] === raw.message) return prev
-        return [...prev, raw.message!]
+        return [...prev, raw.message]
       })
     }
 
@@ -75,7 +93,7 @@ export default function LibrarianView() {
       setError(raw.message ?? "Something went wrong")
       setPhase("error")
     }
-  }, [port.data])
+  }, [jobId, port.data])
 
   useEffect(() => {
     if (!jobId) return
@@ -83,8 +101,24 @@ export default function LibrarianView() {
     const effectiveStatus = storedEvent?.status ?? storedJob?.status
     if (!effectiveStatus) return
 
-    if (!latestEvent && storedEvent?.type === "librarian-progress" && storedEvent.jobId === jobId) {
+    if (
+      storedEvent?.type === "librarian-progress" &&
+      storedEvent.jobId === jobId &&
+      (
+        !latestEvent ||
+        latestEvent.status !== storedEvent.status ||
+        latestEvent.message !== storedEvent.message ||
+        latestEvent.completedCount !== storedEvent.completedCount ||
+        latestEvent.totalCount !== storedEvent.totalCount
+      )
+    ) {
       setLatestEvent(storedEvent)
+      if (storedEvent.message) {
+        setStepLog((prev) => {
+          if (prev[prev.length - 1] === storedEvent.message) return prev
+          return [...prev, storedEvent.message]
+        })
+      }
     }
 
     if (effectiveStatus === "awaiting_approval") {
@@ -118,7 +152,6 @@ export default function LibrarianView() {
     setPhase("running")
   }, [jobId, latestEvent, storedEvent, storedJob])
 
-  // Auto-scroll step log
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [stepLog])
@@ -134,7 +167,7 @@ export default function LibrarianView() {
       const res = (await (sendToBackground as Function)({
         name: "start-librarian",
         body: {
-          payload: { type: "AD_HOC_PROMPT", prompt: prompt.trim(), maxResults: 1 },
+          payload: { type: "AD_HOC_PROMPT", prompt: prompt.trim(), maxResults: DEFAULT_LIBRARIAN_RESULTS },
         },
       })) as StartLibrarianResponse
 
@@ -202,22 +235,9 @@ export default function LibrarianView() {
             }
             className="flex-1 bg-brand-bg border border-brand-light rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-brand transition-colors"
           />
-          <div className="space-y-1">
-            <label className="text-[10px] text-gray-400 uppercase tracking-widest">
-              Vault passphrase
-            </label>
-            <input
-              type="password"
-              value={passphrase}
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
-              placeholder="Enter your passphrase"
-              className="w-full bg-brand-bg border border-brand-light rounded-lg px-3 py-2 text-sm text-black placeholder-gray-400 focus:outline-none focus:border-brand transition-colors"
-            />
-          </div>
           <button
             onClick={handleSubmit}
-            disabled={!prompt.trim() || !passphrase.trim()}
+            disabled={!prompt.trim()}
             className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             Let Librarian handle it
@@ -231,11 +251,11 @@ export default function LibrarianView() {
             <div className="w-4 h-4 border-2 border-brand-light border-t-brand rounded-full animate-spin shrink-0" />
             <div className="min-w-0">
               <p className="text-xs text-black truncate">
-                {STATUS_LABELS[latestEvent?.status ?? "idle"]}
+                {STATUS_LABELS[effectiveEvent?.status ?? storedJob?.status ?? "idle"]}
               </p>
-              {latestEvent && latestEvent.totalCount > 0 && (
+              {(effectiveEvent?.totalCount ?? 0) > 0 && (
                 <p className="text-[10px] text-gray-500">
-                  {latestEvent.completedCount} / {latestEvent.totalCount}
+                  {effectiveEvent?.completedCount ?? 0} / {effectiveEvent?.totalCount ?? 0}
                 </p>
               )}
             </div>
@@ -320,24 +340,46 @@ export default function LibrarianView() {
           <div className="text-center">
             <p className="text-base font-semibold text-black">Task done!</p>
             <p className="text-[11px] text-gray-500 mt-1 max-w-[230px] mx-auto">
-              {latestEvent.completedCount} of {latestEvent.totalCount} submitted successfully
+              {latestEvent.completedCount} of {latestEvent.totalCount} {isDigitalGhost ? "sites" : "applications"} completed successfully
             </p>
           </div>
+
+          {latestEvent.results.filter((r) => r.status === "submitted").length > 0 && (
+            <div className="w-full rounded-lg border border-green-300/60 bg-green-50 p-3">
+              <p className="text-[10px] uppercase tracking-widest text-green-700">
+                {isDigitalGhost ? "Opted Out Of" : "Worked On"}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {latestEvent.results
+                  .filter((r) => r.status === "submitted")
+                  .map((r) => (
+                    <span
+                      key={r.url}
+                      className="rounded-full border border-green-300 bg-white px-2.5 py-1 text-[11px] text-green-800"
+                    >
+                      {getResultLabel(r)}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div className="w-full bg-brand-bg border border-brand-light rounded-lg p-3 space-y-2 max-h-44 overflow-y-auto">
             {latestEvent.results.map((r) => (
               <div key={r.url} className="flex items-start gap-2 text-[11px]">
-                <span className={
-                  r.status === "submitted" ? "text-brand shrink-0" :
-                  r.status === "error" ? "text-red-500 shrink-0" :
-                  "text-gray-400 shrink-0"
-                }>
+                <span
+                  className={
+                    r.status === "submitted"
+                      ? "text-brand shrink-0"
+                      : r.status === "error"
+                        ? "text-red-500 shrink-0"
+                        : "text-gray-400 shrink-0"
+                  }
+                >
                   {r.status === "submitted" ? "✓" : r.status === "error" ? "✗" : "—"}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-black truncate">
-                    {r.jobTitle ?? r.company ?? new URL(r.url).hostname}
-                  </p>
+                  <p className="text-black truncate">{getResultLabel(r)}</p>
                   {r.error && <p className="text-red-500 truncate">{r.error}</p>}
                 </div>
               </div>
@@ -375,7 +417,11 @@ function HitlItem({
   onToggle: (url: string, checked: boolean) => void
 }) {
   const hostname = (() => {
-    try { return new URL(result.url).hostname } catch { return result.url }
+    try {
+      return new URL(result.url).hostname
+    } catch {
+      return result.url
+    }
   })()
 
   return (

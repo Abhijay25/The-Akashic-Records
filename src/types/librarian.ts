@@ -167,6 +167,19 @@ export const KNOWN_DATA_BROKERS = [
   { name: "FastPeopleSearch", url: "https://www.fastpeoplesearch.com" },
 ] as const
 
+export function getKnownBrokerName(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "")
+    const match = KNOWN_DATA_BROKERS.find((broker) => {
+      const brokerHost = new URL(broker.url).hostname.replace(/^www\./, "")
+      return hostname === brokerHost || hostname.endsWith(`.${brokerHost}`)
+    })
+    return match?.name ?? null
+  } catch {
+    return null
+  }
+}
+
 const DIGITAL_GHOST_PATTERNS = [
   "data broker",
   "broker opt out",

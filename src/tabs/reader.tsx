@@ -1,3 +1,4 @@
+import "~style.css"
 import { useEffect, useMemo, useState } from "react"
 import { Storage } from "@plasmohq/storage"
 import { STORAGE_KEYS } from "~types/constants"

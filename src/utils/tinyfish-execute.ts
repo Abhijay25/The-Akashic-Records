@@ -1,5 +1,6 @@
 import { TinyFish, BrowserProfile, RunStatus } from "@tiny-fish/sdk"
 import { isBlacklisted } from "~utils/blacklist"
+import { getKnownBrokerName } from "~types/librarian"
 import type { UserPersona, ExecutionResult } from "~types/librarian"
 
 const client = new TinyFish({
@@ -257,7 +258,7 @@ export async function executeDataBrokerOptOut({
   return {
     url,
     status: "filled",
-    company: new URL(url).hostname,
+    company: getKnownBrokerName(url) ?? new URL(url).hostname,
     filledAt: new Date().toISOString(),
   }
 }
