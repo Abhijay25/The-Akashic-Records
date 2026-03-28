@@ -1,5 +1,5 @@
 // Speedreader tab — teammate owns this file.
-// Renders a BookEntry as clean markdown prose.
+// Renders a Book Chapter as clean markdown prose.
 // URL params: ?bookId=<id>&entryId=<id>
 
 export default function Reader() {

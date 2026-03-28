@@ -1,9 +1,10 @@
 import { z } from "zod"
 
-export const BookEntrySchema = z.object({
+export const ChapterSchema = z.object({
   id: z.string(),
   title: z.string(),
-  content: z.string(), // markdown
+  content: z.string(), // markdown — structure depends on Book's templateId
+  metadata: z.record(z.unknown()).optional(),
   sourceUrl: z.string().url(),
   scrapedAt: z.string().datetime()
 })
@@ -20,8 +21,9 @@ export const BookStatusSchema = z.enum([
 export const BookSchema = z.object({
   id: z.string(),
   prompt: z.string(),
+  templateId: z.string(), // which FeedTemplate was used — informs Speedreader rendering
   status: BookStatusSchema,
-  entries: z.array(BookEntrySchema),
+  chapters: z.array(ChapterSchema),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   error: z.string().optional()
@@ -29,11 +31,15 @@ export const BookSchema = z.object({
 
 export const FeedConfigSchema = z.object({
   prompt: z.string().min(1),
-  maxResults: z.number().int().min(1).max(20).default(5),
-  browserProfile: z.enum(["lite", "full"]).default("lite")
+  maxResults: z.number().int().min(1).max(30).default(10),
+  browserProfile: z.enum(["lite", "full"]).default("lite"),
+  // Optional override — if omitted, detectTemplate() picks automatically
+  templateId: z.string().optional(),
+  // If provided, refreshes an existing Book instead of creating a new one
+  bookId: z.string().optional()
 })
 
-export type BookEntry = z.infer<typeof BookEntrySchema>
+export type Chapter = z.infer<typeof ChapterSchema>
 export type BookStatus = z.infer<typeof BookStatusSchema>
 export type Book = z.infer<typeof BookSchema>
 export type FeedConfig = z.infer<typeof FeedConfigSchema>

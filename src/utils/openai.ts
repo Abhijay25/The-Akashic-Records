@@ -7,8 +7,8 @@ const client = new OpenAI({
 
 const KEYWORD_SYSTEM_PROMPT = `You are a search query generator. Given a natural language topic, produce 2-3 precise web search queries that would surface recent, authoritative content on that topic.
 
-Return ONLY a JSON array of strings. Example:
-["query one", "query two", "query three"]`
+Return ONLY a JSON object with a "queries" array of strings. Example:
+{"queries": ["query one", "query two", "query three"]}`
 
 /**
  * Converts a natural language prompt into 2-3 optimized search queries.
@@ -24,45 +24,47 @@ export async function extractKeywords(prompt: string): Promise<string[]> {
     temperature: 0.3
   })
 
-  const raw = completion.choices[0]?.message?.content ?? "[]"
+  const raw = completion.choices[0]?.message?.content ?? "{}"
 
   try {
     const parsed = JSON.parse(raw)
-    // Handle both {"queries": [...]} and direct arrays
-    const arr = Array.isArray(parsed) ? parsed : (parsed.queries ?? parsed.results ?? Object.values(parsed)[0])
-    if (!Array.isArray(arr)) throw new Error("No array found in response")
+    const arr: unknown =
+      parsed.queries ?? parsed.results ?? Object.values(parsed)[0]
+    if (!Array.isArray(arr)) throw new Error("No array found")
     return arr.filter((q): q is string => typeof q === "string").slice(0, 3)
   } catch {
-    // Fallback: use the prompt itself as the query
     console.warn("[openai] extractKeywords parse failed, using prompt as-is")
     return [prompt]
   }
 }
 
 /**
- * Parses raw scraped content into a structured BookEntry using GPT-4o-mini.
- * Returns null on repeated failure so the caller can skip the entry.
+ * Parses raw TinyFish-extracted content into { title, content } using GPT-4o-mini.
+ * systemPrompt comes from the active FeedTemplate.
+ * Retries once with a stricter instruction on failure.
+ * Returns null if both attempts fail — caller should use Tavily snippet as fallback.
  */
 export async function llmA_parse(
   rawContent: string,
   systemPrompt: string
 ): Promise<string | null> {
   const attempt = async (strict: boolean): Promise<string | null> => {
+    const sysMsg = strict
+      ? systemPrompt +
+        "\n\nCRITICAL: Return ONLY valid JSON with exactly three fields: title (string), content (string), and metadata (object). No extra keys, no prose outside the JSON."
+      : systemPrompt
+
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: strict
-            ? systemPrompt +
-              "\n\nCRITICAL: Return ONLY valid JSON matching the schema. No extra text."
-            : systemPrompt
-        },
+        { role: "system", content: sysMsg },
+        // Truncate to stay within token limits while preserving the most useful content
         { role: "user", content: rawContent.slice(0, 8000) }
       ],
       response_format: { type: "json_object" },
       temperature: 0.1
     })
+
     return completion.choices[0]?.message?.content ?? null
   }
 
@@ -74,8 +76,7 @@ export async function llmA_parse(
   }
 
   try {
-    const result = await attempt(true)
-    return result
+    return await attempt(true)
   } catch (err) {
     console.warn("[openai] llmA_parse attempt 2 failed:", err)
     return null
