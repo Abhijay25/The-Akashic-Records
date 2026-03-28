@@ -18,7 +18,7 @@ export default function LibraryView() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* History sidebar */}
-      <div className="w-[130px] shrink-0 border-r border-brand-light flex flex-col overflow-hidden bg-brand-bg">
+      <div className="w-[130px] shrink-0 border-r border-[#F6B37A] flex flex-col overflow-hidden bg-[#FFF6ED]">
         <div className="px-3 pt-3 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
           History
         </div>
@@ -38,7 +38,7 @@ export default function LibraryView() {
         </div>
         <button
           onClick={() => setActiveBookId(null)}
-          className="m-2 py-1.5 text-[11px] text-gray-500 hover:text-black border border-brand-light hover:border-brand rounded transition-colors"
+          className="m-2 py-1.5 text-[11px] text-gray-500 hover:text-black border border-[#F6B37A] hover:border-[#FF7A00] rounded transition-colors"
         >
           + New
         </button>
@@ -72,7 +72,7 @@ function HistoryItem({
       title={book?.prompt}
       className={`w-full text-left px-3 py-2 text-[11px] leading-tight transition-colors ${
         isActive
-          ? "bg-brand-light text-black font-medium"
+          ? "bg-[#F6B37A] text-black font-medium"
           : "text-gray-600 hover:text-black hover:bg-white"
       }`}
     >
@@ -94,7 +94,7 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
   if (!book) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-brand-light border-t-brand rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-[#F6B37A] border-t-[#FF7A00] rounded-full animate-spin" />
       </div>
     )
   }
@@ -134,7 +134,7 @@ function ActiveBook({ bookId, onNewSearch }: { bookId: string; onNewSearch: () =
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
-      <div className="w-7 h-7 border-2 border-brand-light border-t-brand rounded-full animate-spin" />
+      <div className="w-7 h-7 border-2 border-[#F6B37A] border-t-[#FF7A00] rounded-full animate-spin" />
       <div className="text-center">
         <p className="text-sm text-black">{statusLabel[status ?? "idle"] ?? "Working..."}</p>
         {chaptersCount > 0 && (
@@ -194,13 +194,13 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
         }}
         placeholder={"e.g. latest news on US-Iran relations\ne.g. Shopee internship openings"}
         disabled={isLoading}
-        className="w-full h-28 bg-brand-bg border border-brand-light rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-brand transition-colors"
+        className="w-full h-28 bg-[#FFF6ED] border border-[#F6B37A] rounded-lg p-3 text-sm text-black placeholder-gray-400 resize-none focus:outline-none focus:border-[#FF7A00] transition-colors"
       />
       {error && <p className="text-red-500 text-xs w-full">{error}</p>}
       <button
         onClick={submit}
         disabled={!prompt.trim() || isLoading}
-        className="w-full py-2.5 bg-brand text-white rounded-lg text-sm font-semibold hover:bg-brand-light hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="w-full py-2.5 bg-[#FF7A00] text-white rounded-lg text-sm font-semibold hover:bg-[#F6B37A] hover:text-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         {isLoading ? "Starting..." : "Search"}
       </button>
@@ -211,7 +211,7 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
 function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => void }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-brand-light shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[#F6B37A] shrink-0">
         <span className="text-[11px] text-gray-500">{book.chapters.length} articles</span>
         <button
           onClick={onNewSearch}
@@ -220,7 +220,7 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
           New search
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-brand-bg">
+      <div className="flex-1 overflow-y-auto divide-y divide-[#FFF6ED]">
         {book.chapters.map((chapter, i) => (
           <ArticleCard key={chapter.id} entry={chapter} index={i + 1} />
         ))}
@@ -247,10 +247,10 @@ function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
   return (
     <button
       onClick={() => chrome.tabs.create({ url: entry.sourceUrl })}
-      className="w-full text-left p-3 hover:bg-brand-bg transition-colors group"
+      className="w-full text-left p-3 hover:bg-[#FFF6ED] transition-colors group"
     >
       <div className="flex gap-2">
-        <span className="text-[10px] text-brand font-mono mt-0.5 shrink-0 w-4">{index}</span>
+        <span className="text-[10px] text-[#FF7A00] font-mono mt-0.5 shrink-0 w-4">{index}</span>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-black leading-snug line-clamp-2">
             {entry.title}
@@ -260,7 +260,7 @@ function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
           </p>
           <p className="text-[10px] text-gray-400 mt-1 truncate">{hostname}</p>
         </div>
-        <span className="text-brand text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
+        <span className="text-[#FF7A00] text-xs shrink-0 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
           ↗
         </span>
       </div>

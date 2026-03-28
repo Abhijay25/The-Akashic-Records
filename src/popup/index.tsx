@@ -22,24 +22,24 @@ export default function Popup() {
       </div>
 
       {/* Bottom tab bar */}
-      <div className="flex border-t border-brand-light shrink-0">
+      <div className="flex border-t border-[#F6B37A] shrink-0">
         <button
           onClick={() => setTab("library")}
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
             tab === "library"
-              ? "bg-brand text-white"
-              : "text-gray-500 hover:text-black hover:bg-brand-bg"
+              ? "bg-[#FF7A00] text-white"
+              : "text-gray-500 hover:text-black hover:bg-[#FFF6ED]"
           }`}
         >
           Library
         </button>
-        <div className="w-px bg-brand-light" />
+        <div className="w-px bg-[#F6B37A]" />
         <button
           onClick={() => setTab("librarian")}
           className={`flex-1 py-3 text-sm font-medium transition-colors ${
             tab === "librarian"
-              ? "bg-brand text-white"
-              : "text-gray-500 hover:text-black hover:bg-brand-bg"
+              ? "bg-[#FF7A00] text-white"
+              : "text-gray-500 hover:text-black hover:bg-[#FFF6ED]"
           }`}
         >
           Librarian
