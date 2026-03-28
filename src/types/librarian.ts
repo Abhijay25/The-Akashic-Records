@@ -154,6 +154,50 @@ export const BLACKLISTED_DOMAINS = [
   "singpass.gov.sg",
 ] as const
 
+export const KNOWN_DATA_BROKERS = [
+  { name: "Spokeo", url: "https://www.spokeo.com" },
+  { name: "Whitepages", url: "https://www.whitepages.com" },
+  { name: "BeenVerified", url: "https://www.beenverified.com" },
+  { name: "Intelius", url: "https://www.intelius.com" },
+  { name: "MyLife", url: "https://www.mylife.com" },
+  { name: "Radaris", url: "https://radaris.com" },
+  { name: "PeopleFinders", url: "https://www.peoplefinders.com" },
+  { name: "TruthFinder", url: "https://www.truthfinder.com" },
+  { name: "USSearch", url: "https://www.ussearch.com" },
+  { name: "FastPeopleSearch", url: "https://www.fastpeoplesearch.com" },
+] as const
+
+export function getKnownBrokerName(url: string): string | null {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "")
+    const match = KNOWN_DATA_BROKERS.find((broker) => {
+      const brokerHost = new URL(broker.url).hostname.replace(/^www\./, "")
+      return hostname === brokerHost || hostname.endsWith(`.${brokerHost}`)
+    })
+    return match?.name ?? null
+  } catch {
+    return null
+  }
+}
+
+const DIGITAL_GHOST_PATTERNS = [
+  "data broker",
+  "broker opt out",
+  "broker opt-out",
+  "opt out",
+  "opt-out",
+  "remove my data",
+  "remove my info",
+  "privacy removal",
+  "delete my profile",
+  "people search",
+] as const
+
+export function isDigitalGhostPrompt(prompt: string): boolean {
+  const normalized = prompt.toLowerCase()
+  return DIGITAL_GHOST_PATTERNS.some((pattern) => normalized.includes(pattern))
+}
+
 // ── Mock Persona (NUS CS student @ ren EdTech) ───────────────────────────────
 
 export const MOCK_PERSONA: UserPersona = {

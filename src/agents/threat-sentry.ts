@@ -23,6 +23,10 @@ async function persistBook(book: Book): Promise<void> {
   }
 }
 
+async function persistProgress(event: FeedProgressEvent): Promise<void> {
+  await storage.set(STORAGE_KEYS.FEED_PROGRESS_PREFIX + event.bookId, event)
+}
+
 /**
  * Processes an array of items in parallel batches.
  * Items within a batch run concurrently; batches run sequentially.
@@ -102,22 +106,32 @@ export async function runThreatSentry(
     chaptersCount: 0,
     message: "Breaking down your prompt…"
   })
+  await persistProgress({
+    type: "feed-progress",
+    bookId,
+    status: "scouting",
+    chaptersCount: 0,
+    message: "Breaking down your prompt…"
+  })
 
   let queries: string[]
   try {
     queries = await extractKeywords(config.prompt)
-  } catch {
+  } catch (err) {
+    console.warn("[library] extractKeywords failed, using raw prompt:", err)
     queries = [config.prompt]
   }
 
   // ── Phase 2: Scout the web ───────────────────────────────────────────────
-  onProgress({
+  const scoutingEvent: FeedProgressEvent = {
     type: "feed-progress",
     bookId,
     status: "scouting",
     chaptersCount: 0,
     message: `Searching for "${config.prompt}"…`
-  })
+  }
+  onProgress(scoutingEvent)
+  await persistProgress(scoutingEvent)
 
   const scoutResults: Array<{
     url: string
@@ -156,13 +170,15 @@ export async function runThreatSentry(
       updatedAt: new Date().toISOString()
     }
     await persistBook(book)
-    onProgress({
+    const errorEvent: FeedProgressEvent = {
       type: "feed-progress",
       bookId,
       status: "error",
       chaptersCount: 0,
       message: book.error
-    })
+    }
+    onProgress(errorEvent)
+    await persistProgress(errorEvent)
     return book
   }
 
@@ -170,13 +186,15 @@ export async function runThreatSentry(
   book = { ...book, status: "scraping", updatedAt: new Date().toISOString() }
   await persistBook(book)
 
-  onProgress({
+  const scrapingEvent: FeedProgressEvent = {
     type: "feed-progress",
     bookId,
     status: "scraping",
     chaptersCount: 0,
     message: `Found ${deduped.length} sources — extracting content…`
-  })
+  }
+  onProgress(scrapingEvent)
+  await persistProgress(scrapingEvent)
 
   type ScrapedItem = {
     url: string
@@ -189,13 +207,24 @@ export async function runThreatSentry(
     deduped,
     SCRAPE_BATCH_SIZE,
     async (result, index) => {
-      onProgress({
+      const progressEvent: FeedProgressEvent = {
         type: "feed-progress",
         bookId,
         status: "scraping",
         chaptersCount: book.chapters.length,
         message: `Extracting source ${index + 1} of ${deduped.length}…`
-      })
+      }
+      onProgress(progressEvent)
+      await persistProgress(progressEvent)
+
+      if (config.browserProfile === "lite") {
+        return {
+          url: result.url,
+          title: result.title,
+          rawContent: "",
+          fallbackContent: result.content
+        }
+      }
 
       const { content, success } = await runTinyFish({
         url: result.url,
@@ -221,13 +250,15 @@ export async function runThreatSentry(
   for (let i = 0; i < scrapedItems.length; i++) {
     const item = scrapedItems[i]
 
-    onProgress({
+    const parsingEvent: FeedProgressEvent = {
       type: "feed-progress",
       bookId,
       status: "parsing",
       chaptersCount: book.chapters.length,
       message: `Summarizing chapter ${i + 1} of ${total}…`
-    })
+    }
+    onProgress(parsingEvent)
+    await persistProgress(parsingEvent)
 
     const contentToParse = item.rawContent || item.fallbackContent
     if (!contentToParse.trim()) {
@@ -296,13 +327,15 @@ export async function runThreatSentry(
     ? `Refresh complete — ${newCount} new chapter${newCount === 1 ? "" : "s"} added`
     : `Done — ${finalChapters.length} chapter${finalChapters.length === 1 ? "" : "s"} ready`
 
-  onProgress({
+  const doneEvent: FeedProgressEvent = {
     type: "feed-progress",
     bookId,
     status: "done",
     chaptersCount: finalChapters.length,
     message: doneMessage
-  })
+  }
+  onProgress(doneEvent)
+  await persistProgress(doneEvent)
 
   return book
 }
