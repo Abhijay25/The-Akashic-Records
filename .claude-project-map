@@ -1,0 +1,38 @@
+# The Akashic Records — Project Map
+# Auto-maintained. Do not edit manually.
+
+## Engine (your files)
+src/types/book.ts           — Book, BookEntry, FeedConfig Zod schemas
+src/types/messages.ts       — StartFeedRequest/Response, FeedProgressEvent
+src/types/constants.ts      — STORAGE_KEYS, PORT_NAMES, MESSAGE_NAMES
+src/utils/openai.ts         — extractKeywords(), llmA_parse() via GPT-4o-mini
+src/utils/tavily.ts         — tavilyScout() via @tavily/core
+src/utils/tinyfish.ts       — runTinyFish() wrapping TinyFish agent.stream()
+src/agents/threat-sentry.ts — Orchestration: NL → keywords → scout → scrape → parse → Book
+src/background/index.ts     — Service worker entry (onInstalled, storage init)
+src/background/messages/start-feed.ts  — Plasmo message handler, kicks off pipeline
+src/background/ports/agent-status.ts   — Plasmo port handler for progress events
+
+## Frontend (teammate's files)
+src/style.css               — Tailwind directives
+src/popup/index.tsx         — Popup shell placeholder (teammate expands)
+src/tabs/reader.tsx         — Speedreader tab placeholder (teammate expands)
+src/components/             — (teammate creates)
+src/store/bookshelf.ts      — (teammate creates)
+
+## Config
+package.json                — Plasmo 0.90.5, manifest permissions
+tsconfig.json               — paths alias ~* → ./src/*
+tailwind.config.js
+postcss.config.js
+assets/icon.png             — Extension icon
+.env.example                — API key template (copy to .env)
+
+## Storage layout
+chrome.storage.local:
+  "books:index"             → string[] of bookIds
+  "books:entry:<id>"        → serialized Book JSON
+
+## Messaging
+Message:  "start-feed"      → StartFeedRequest / StartFeedResponse
+Port:     "agent-status"    → background pushes FeedProgressEvent to popup
