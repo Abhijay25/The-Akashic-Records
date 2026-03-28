@@ -45,29 +45,54 @@ async function batchProcess<T, R>(
 
 /**
  * Full pipeline: NL prompt → template detection → keywords → scout → scrape (batched) → parse → Book
+ * If config.bookId is provided, refreshes that existing Book (new chapters prepended, no URL repeats).
  */
 export async function runThreatSentry(
   config: FeedConfig,
   onProgress: ProgressCallback
 ): Promise<Book> {
-  const bookId = crypto.randomUUID()
   const now = new Date().toISOString()
+  const isRefresh = !!config.bookId
 
   const template = config.templateId
     ? getTemplate(config.templateId)
     : detectTemplate(config.prompt)
 
-  let book: Book = {
-    id: bookId,
-    prompt: config.prompt,
-    templateId: template.id,
-    status: "scouting",
-    chapters: [],
-    createdAt: now,
-    updatedAt: now
+  // Load existing book on refresh, or create a fresh one
+  let existingChapters: Chapter[] = []
+  let seenUrls = new Set<string>()
+
+  let book: Book
+
+  if (isRefresh) {
+    const existing = await storage.get<Book>(
+      STORAGE_KEYS.BOOK_PREFIX + config.bookId
+    )
+    if (!existing) {
+      // bookId not found — fall back to creating a new book
+      console.warn("[library] refresh bookId not found, creating new book")
+    } else {
+      existingChapters = existing.chapters
+      seenUrls = new Set(existing.chapters.map((c) => c.sourceUrl))
+      book = { ...existing, status: "scouting", updatedAt: now }
+      await persistBook(book)
+    }
   }
 
-  await persistBook(book)
+  if (!book) {
+    book = {
+      id: crypto.randomUUID(),
+      prompt: config.prompt,
+      templateId: template.id,
+      status: "scouting",
+      chapters: [],
+      createdAt: now,
+      updatedAt: now
+    }
+    await persistBook(book)
+  }
+
+  const bookId = book.id
 
   // ── Phase 1: Extract search queries ─────────────────────────────────────
   onProgress({
@@ -113,12 +138,11 @@ export async function runThreatSentry(
     }
   }
 
-  // Deduplicate by URL, keep top maxResults by score
-  const seen = new Set<string>()
+  // Deduplicate within scout results, then filter out URLs already in this Book
   const deduped = scoutResults
     .filter((r) => {
-      if (seen.has(r.url)) return false
-      seen.add(r.url)
+      if (seenUrls.has(r.url)) return false
+      seenUrls.add(r.url)
       return true
     })
     .sort((a, b) => b.score - a.score)
@@ -252,15 +276,31 @@ export async function runThreatSentry(
   }
 
   // ── Done ────────────────────────────────────────────────────────────────
-  book = { ...book, status: "done", updatedAt: new Date().toISOString() }
+  // On refresh: prepend new chapters so latest appear first; preserve existing ones
+  const newChapters = book.chapters
+  const finalChapters = isRefresh
+    ? [...newChapters, ...existingChapters]
+    : newChapters
+
+  book = {
+    ...book,
+    chapters: finalChapters,
+    status: "done",
+    updatedAt: new Date().toISOString()
+  }
   await persistBook(book)
+
+  const newCount = newChapters.length
+  const doneMessage = isRefresh
+    ? `Refresh complete — ${newCount} new chapter${newCount === 1 ? "" : "s"} added`
+    : `Done — ${finalChapters.length} chapter${finalChapters.length === 1 ? "" : "s"} ready`
 
   onProgress({
     type: "feed-progress",
     bookId,
     status: "done",
-    chaptersCount: book.chapters.length,
-    message: `Done — ${book.chapters.length} chapter${book.chapters.length === 1 ? "" : "s"} ready`
+    chaptersCount: finalChapters.length,
+    message: doneMessage
   })
 
   return book

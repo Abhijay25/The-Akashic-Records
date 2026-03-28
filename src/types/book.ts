@@ -33,7 +33,9 @@ export const FeedConfigSchema = z.object({
   maxResults: z.number().int().min(1).max(30).default(10),
   browserProfile: z.enum(["lite", "full"]).default("lite"),
   // Optional override — if omitted, detectTemplate() picks automatically
-  templateId: z.string().optional()
+  templateId: z.string().optional(),
+  // If provided, refreshes an existing Book instead of creating a new one
+  bookId: z.string().optional()
 })
 
 export type Chapter = z.infer<typeof ChapterSchema>
