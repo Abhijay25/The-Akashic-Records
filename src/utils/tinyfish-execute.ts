@@ -5,6 +5,7 @@ import type { UserPersona, ExecutionResult } from "~types/librarian"
 const client = new TinyFish({
   apiKey: process.env.PLASMO_PUBLIC_TINYFISH_API_KEY ?? "",
 })
+const STEALTH_TIMEOUT_MS = 90_000
 
 // ── Goal Prompts ─────────────────────────────────────────────────────────────
 
@@ -86,28 +87,45 @@ interface TinyFishRawResult {
   success: boolean
 }
 
-async function runStealth(url: string, goal: string): Promise<TinyFishRawResult> {
+async function runStealth(
+  url: string,
+  goal: string,
+  onProgress?: (message: string) => void
+): Promise<TinyFishRawResult> {
   try {
-    const stream = await client.agent.stream({
-      goal,
-      url,
-      browser_profile: BrowserProfile.STEALTH,
-    })
+    const runTask = async (): Promise<TinyFishRawResult> => {
+      const stream = await client.agent.stream({
+        goal,
+        url,
+        browser_profile: BrowserProfile.STEALTH,
+      })
 
-    let resultContent = ""
+      let resultContent = ""
 
-    for await (const event of stream) {
-      if (event.type === "COMPLETE") {
-        if (event.status === RunStatus.COMPLETED && event.result) {
-          resultContent = JSON.stringify(event.result, null, 2)
-        } else if (event.error) {
-          console.warn("[tinyfish-execute] run failed:", event.error.message)
-          return { content: "", success: false }
+      for await (const event of stream) {
+        if (event.type === "PROGRESS") {
+          onProgress?.(event.purpose)
+        } else if (event.type === "COMPLETE") {
+          if (event.status === RunStatus.COMPLETED && event.result) {
+            resultContent = JSON.stringify(event.result, null, 2)
+          } else if (event.error) {
+            console.warn("[tinyfish-execute] run failed:", event.error.message)
+            return { content: "", success: false }
+          }
         }
       }
+
+      return { content: resultContent.trim(), success: !!resultContent.trim() }
     }
 
-    return { content: resultContent.trim(), success: !!resultContent.trim() }
+    const timeoutTask = new Promise<TinyFishRawResult>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[tinyfish-execute] stealth run timed out after ${STEALTH_TIMEOUT_MS}ms for`, url)
+        resolve({ content: "", success: false })
+      }, STEALTH_TIMEOUT_MS)
+    })
+
+    return await Promise.race([runTask(), timeoutTask])
   } catch (err) {
     console.error("[tinyfish-execute] stream error for", url, err)
     return { content: "", success: false }
@@ -140,9 +158,11 @@ export interface ExtractAtsResult {
 export async function executeTinyFishForm({
   url,
   persona,
+  onProgress,
 }: {
   url: string
   persona: UserPersona
+  onProgress?: (message: string) => void
 }): Promise<ExecutionResult> {
   if (isBlacklisted(url)) {
     return {
@@ -153,7 +173,7 @@ export async function executeTinyFishForm({
   }
 
   const goal = buildFormFillGoal(persona)
-  const { content, success } = await runStealth(url, goal)
+  const { content, success } = await runStealth(url, goal, onProgress)
 
   if (!success) {
     return {
@@ -197,12 +217,14 @@ export async function executeTinyFishForm({
 export async function executeDataBrokerOptOut({
   url,
   persona,
+  onProgress,
 }: {
   url: string
   persona: UserPersona
+  onProgress?: (message: string) => void
 }): Promise<ExecutionResult> {
   const goal = buildDataBrokerOptOutGoal(persona)
-  const { content, success } = await runStealth(url, goal)
+  const { content, success } = await runStealth(url, goal, onProgress)
 
   if (!success) {
     return {

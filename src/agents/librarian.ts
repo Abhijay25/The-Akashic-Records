@@ -246,11 +246,30 @@ export async function runLibrarian(
     await persistProgress(progressEvent)
     onProgress(progressEvent)
 
+    const handleExecutionProgress = async (message: string) => {
+      job = {
+        ...job,
+        updatedAt: new Date().toISOString(),
+      }
+      await persistJob(job)
+      const detailEvent: LibrarianProgressEvent = {
+        type: "librarian-progress",
+        jobId: job.id,
+        status: "executing",
+        completedCount: i,
+        totalCount: allowed.length,
+        results: job.results,
+        message: `[TinyFish] ${message}`,
+      }
+      await persistProgress(detailEvent)
+      onProgress(detailEvent)
+    }
+
     let result: ExecutionResult
     try {
       result = isDigitalGhost
-        ? await executeDataBrokerOptOut({ url, persona })
-        : await executeTinyFishForm({ url, persona })
+        ? await executeDataBrokerOptOut({ url, persona, onProgress: handleExecutionProgress })
+        : await executeTinyFishForm({ url, persona, onProgress: handleExecutionProgress })
     } catch (err) {
       result = {
         url,

@@ -7,6 +7,9 @@ import { STORAGE_KEYS } from "~types/constants"
 import type { StartFeedResponse, FeedProgressEvent, LibrarianProgressEvent } from "~types/messages"
 import type { Book, Chapter } from "~types/book"
 
+const localStore = new Storage({ area: "local" })
+const DEFAULT_LIBRARY_RESULTS = 8
+
 type PortEvent = FeedProgressEvent | LibrarianProgressEvent
 // Cast needed until `plasmo dev` generates PortsMetadata types
 const useAgentPort = () =>
@@ -198,7 +201,7 @@ function PromptView({ onBookCreated }: { onBookCreated: (id: string) => void }) 
       const res = (await Promise.race([
         (sendToBackground as Function)({
           name: "start-feed",
-          body: { config: { prompt: prompt.trim(), maxResults: 3, browserProfile: "lite" } },
+          body: { config: { prompt: prompt.trim(), maxResults: DEFAULT_LIBRARY_RESULTS, browserProfile: "lite" } },
         }),
         timeout,
       ])) as StartFeedResponse
@@ -259,14 +262,14 @@ function ResultsView({ book, onNewSearch }: { book: Book; onNewSearch: () => voi
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-brand-bg">
         {book.chapters.map((chapter, i) => (
-          <ArticleCard key={chapter.id} entry={chapter} index={i + 1} />
+          <ArticleCard key={chapter.id} bookId={book.id} entry={chapter} index={i + 1} />
         ))}
       </div>
     </div>
   )
 }
 
-function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
+function ArticleCard({ bookId, entry, index }: { bookId: string; entry: Chapter; index: number }) {
   const summary = entry.content
     .replace(/#{1,6}\s/g, "")
     .replace(/[*`_[\]]/g, "")
@@ -283,7 +286,11 @@ function ArticleCard({ entry, index }: { entry: Chapter; index: number }) {
 
   return (
     <button
-      onClick={() => chrome.tabs.create({ url: entry.sourceUrl })}
+      onClick={() =>
+        chrome.tabs.create({
+          url: chrome.runtime.getURL(`tabs/reader.html?bookId=${encodeURIComponent(bookId)}&entryId=${encodeURIComponent(entry.id)}`),
+        })
+      }
       className="w-full text-left p-3 hover:bg-brand-bg transition-colors group"
     >
       <div className="flex gap-2">

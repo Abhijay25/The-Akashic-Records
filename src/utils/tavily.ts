@@ -29,12 +29,17 @@ export async function tavilyScout({
     timeout,
   ])
 
-  return (response.results ?? [])
-    .filter((r) => r.score >= 0.5)
-    .map((r) => ({
-      url: r.url,
-      title: r.title,
-      content: r.content,
-      score: r.score
-    }))
+  const mapped = (response.results ?? []).map((r) => ({
+    url: r.url,
+    title: r.title,
+    content: r.content,
+    score: r.score
+  }))
+
+  const highConfidence = mapped.filter((r) => r.score >= 0.5)
+  const selected = highConfidence.length >= Math.min(3, maxResults)
+    ? highConfidence
+    : mapped
+
+  return selected.slice(0, maxResults)
 }
