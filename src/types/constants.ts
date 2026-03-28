@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   VAULT_DATA: "vault:data",
   LIBRARIAN_JOBS_INDEX: "librarian:jobs:index",
   LIBRARIAN_JOB_PREFIX: "librarian:job:",
+  LIBRARIAN_SETTINGS: "librarian:settings",
 } as const
 
 export const PORT_NAMES = {
@@ -16,4 +17,6 @@ export const MESSAGE_NAMES = {
   SETUP_PERSONA: "setup-persona",
   START_LIBRARIAN: "start-librarian",
   APPROVE_SUBMIT: "approve-submit",
+  GET_LIBRARIAN_SETTINGS: "get-librarian-settings",
+  UPDATE_LIBRARIAN_SETTINGS: "update-librarian-settings",
 } as const
