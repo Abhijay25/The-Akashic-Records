@@ -1,7 +1,7 @@
 import { Storage } from "@plasmohq/storage"
 import { tavilyScout } from "~utils/tavily"
 import { filterBlacklisted } from "~utils/blacklist"
-import { KNOWN_DATA_BROKERS, MOCK_PERSONA, getKnownBrokerName, isDigitalGhostPrompt } from "~types/librarian"
+import { KNOWN_DATA_BROKERS, MOCK_PERSONA, getKnownBrokerName, isDigitalGhostPrompt, sortKnownBrokersForPrompt } from "~types/librarian"
 import { extractAtsLink, executeDataBrokerOptOut, executeTinyFishForm, submitFilledForm } from "~utils/tinyfish-execute"
 import { STORAGE_KEYS } from "~types/constants"
 import { LibrarianJobSchema } from "~types/librarian"
@@ -20,6 +20,19 @@ const SCRAPE_BATCH_SIZE = 3
 
 type ProgressCallback = (event: LibrarianProgressEvent) => void
 
+const PROMPT_HISTORY_LIMIT = 25
+const NEGATIVE_PROMPT_CUES = [
+  "don't",
+  "do not",
+  "dont",
+  "not",
+  "avoid",
+  "skip",
+  "except",
+  "exclude",
+  "without",
+] as const
+
 // ── Persistence ──────────────────────────────────────────────────────────────
 
 async function persistJob(job: LibrarianJob): Promise<void> {
@@ -33,6 +46,40 @@ async function persistJob(job: LibrarianJob): Promise<void> {
 
 async function persistProgress(event: LibrarianProgressEvent): Promise<void> {
   await storage.set(STORAGE_KEYS.LIBRARIAN_PROGRESS_PREFIX + event.jobId, event)
+}
+
+function getPromptHistoryKey(prompt: string): string {
+  return STORAGE_KEYS.LIBRARIAN_PROMPT_HISTORY_PREFIX + prompt.trim().toLowerCase()
+}
+
+async function getRecentUrlsForPrompt(prompt: string): Promise<string[]> {
+  return (await storage.get<string[]>(getPromptHistoryKey(prompt))) ?? []
+}
+
+async function storeRecentUrlsForPrompt(prompt: string, urls: string[]): Promise<void> {
+  if (!prompt.trim() || urls.length === 0) return
+  const existing = await getRecentUrlsForPrompt(prompt)
+  const merged = [...existing, ...urls].filter((url, index, arr) => arr.indexOf(url) === index)
+  const trimmed = merged.slice(Math.max(0, merged.length - PROMPT_HISTORY_LIMIT))
+  await storage.set(getPromptHistoryKey(prompt), trimmed)
+}
+
+function getExplicitlyExcludedUrls(prompt: string): string[] {
+  const normalized = prompt.trim().toLowerCase()
+  const hasNegativeCue = NEGATIVE_PROMPT_CUES.some((cue) => normalized.includes(cue))
+  if (!hasNegativeCue) return []
+
+  return KNOWN_DATA_BROKERS
+    .filter((broker) => {
+      const brokerName = broker.name.toLowerCase()
+      const brokerHost = new URL(broker.url).hostname.replace(/^www\./, "").toLowerCase()
+      return normalized.includes(brokerName) || normalized.includes(brokerHost)
+    })
+    .map((broker) => broker.url)
+}
+
+function dedupeUrls(urls: string[]): string[] {
+  return urls.filter((url, index, arr) => arr.indexOf(url) === index)
 }
 
 // ── Batch Processing ─────────────────────────────────────────────────────────
@@ -112,17 +159,45 @@ export async function runLibrarian(
   // ── Phase 2 (Mode A only): Scout LinkedIn ────────────────────────────────
 
   let atsUrls: string[] = []
+  const promptHistory =
+    payload.type === "AD_HOC_PROMPT" ? await getRecentUrlsForPrompt(payload.prompt) : []
+  const explicitlyExcludedUrls =
+    payload.type === "AD_HOC_PROMPT" ? getExplicitlyExcludedUrls(payload.prompt) : []
 
   if (isDigitalGhost) {
     const maxResults = Math.min(payload.maxResults, KNOWN_DATA_BROKERS.length)
-    const selectedBrokers = KNOWN_DATA_BROKERS.slice(0, maxResults)
+    const rankedBrokers = sortKnownBrokersForPrompt(payload.prompt)
+    const selectableBrokers = rankedBrokers.filter(
+      (broker) => !explicitlyExcludedUrls.includes(broker.url)
+    )
+    const selectedBrokers = selectableBrokers.slice(0, maxResults)
 
     await emit({
       status: "scouting",
       message: `Finding ${selectedBrokers.length} data broker opt-out flow${selectedBrokers.length === 1 ? "" : "s"}…`,
     })
 
-    atsUrls = selectedBrokers.map((broker) => broker.url)
+    const brokerUrls = selectedBrokers.map((broker) => broker.url)
+    const freshBrokerUrls = brokerUrls.filter((url) => !promptHistory.includes(url))
+    atsUrls = freshBrokerUrls
+
+    if (selectedBrokers.length === 0) {
+      await emit({
+        status: "error",
+        error: "All candidate brokers were excluded by your prompt",
+        message: "All candidate brokers were excluded by your prompt",
+      })
+      return job
+    }
+
+    if (freshBrokerUrls.length === 0 && promptHistory.length > 0) {
+      await emit({
+        status: "error",
+        error: "No new broker targets found for this prompt",
+        message: "No new broker targets found for this prompt — try a different request",
+      })
+      return job
+    }
   } else if (payload.type === "AD_HOC_PROMPT") {
     await emit({
       status: "scouting",
@@ -135,7 +210,7 @@ export async function runLibrarian(
     try {
       const results = await tavilyScout({
         query,
-        maxResults: payload.maxResults,
+        maxResults: Math.min(payload.maxResults * 4, 12),
       })
       scoutResults = results.filter((r) =>
         r.url.includes("linkedin.com/jobs/view")
@@ -193,7 +268,18 @@ export async function runLibrarian(
       )
     }
 
-    atsUrls = extracted.map((r) => r.atsUrl as string)
+    const extractedUrls = dedupeUrls(extracted.map((r) => r.atsUrl as string))
+    const freshUrls = extractedUrls.filter((url) => !promptHistory.includes(url))
+    atsUrls = freshUrls
+
+    if (freshUrls.length === 0 && promptHistory.length > 0) {
+      await emit({
+        status: "error",
+        error: "No new target sites found for this prompt",
+        message: "No new target sites found for this prompt — try a different request",
+      })
+      return job
+    }
   } else {
     // Mode B: use URLs directly from payload
     atsUrls = payload.urls
@@ -341,6 +427,10 @@ export async function runLibrarian(
         ? `${filledCount} broker request${filledCount === 1 ? "" : "s"} ready — review and approve to submit`
         : `${filledCount} form${filledCount === 1 ? "" : "s"} filled — review and approve to submit`,
     })
+  }
+
+  if (payload.type === "AD_HOC_PROMPT") {
+    await storeRecentUrlsForPrompt(payload.prompt, allowed)
   }
 
   return job
