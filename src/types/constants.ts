@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   LIBRARIAN_JOBS_INDEX: "librarian:jobs:index",
   LIBRARIAN_JOB_PREFIX: "librarian:job:",
   LIBRARIAN_PROGRESS_PREFIX: "librarian:progress:",
+  LIBRARIAN_PROMPT_HISTORY_PREFIX: "librarian:prompt-history:",
   LIBRARIAN_SETTINGS: "librarian:settings",
 } as const
 

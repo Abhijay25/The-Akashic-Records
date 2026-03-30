@@ -155,16 +155,16 @@ export const BLACKLISTED_DOMAINS = [
 ] as const
 
 export const KNOWN_DATA_BROKERS = [
-  { name: "Spokeo", url: "https://www.spokeo.com" },
-  { name: "Whitepages", url: "https://www.whitepages.com" },
-  { name: "BeenVerified", url: "https://www.beenverified.com" },
-  { name: "Intelius", url: "https://www.intelius.com" },
-  { name: "MyLife", url: "https://www.mylife.com" },
-  { name: "Radaris", url: "https://radaris.com" },
-  { name: "PeopleFinders", url: "https://www.peoplefinders.com" },
-  { name: "TruthFinder", url: "https://www.truthfinder.com" },
-  { name: "USSearch", url: "https://www.ussearch.com" },
-  { name: "FastPeopleSearch", url: "https://www.fastpeoplesearch.com" },
+  { name: "FastPeopleSearch", url: "https://www.fastpeoplesearch.com", easeRank: 1 },
+  { name: "Radaris", url: "https://radaris.com", easeRank: 2 },
+  { name: "PeopleFinders", url: "https://www.peoplefinders.com", easeRank: 3 },
+  { name: "USSearch", url: "https://www.ussearch.com", easeRank: 4 },
+  { name: "Whitepages", url: "https://www.whitepages.com", easeRank: 5 },
+  { name: "BeenVerified", url: "https://www.beenverified.com", easeRank: 6 },
+  { name: "Intelius", url: "https://www.intelius.com", easeRank: 7 },
+  { name: "TruthFinder", url: "https://www.truthfinder.com", easeRank: 8 },
+  { name: "Spokeo", url: "https://www.spokeo.com", easeRank: 9 },
+  { name: "MyLife", url: "https://www.mylife.com", easeRank: 10 },
 ] as const
 
 export function getKnownBrokerName(url: string): string | null {
@@ -178,6 +178,27 @@ export function getKnownBrokerName(url: string): string | null {
   } catch {
     return null
   }
+}
+
+const EASY_BROKER_PROMPT_PATTERNS = [
+  "easiest",
+  "easy",
+  "quick",
+  "quickest",
+  "simple",
+  "simplest",
+  "low friction",
+  "fastest",
+] as const
+
+export function sortKnownBrokersForPrompt(prompt: string) {
+  const normalized = prompt.toLowerCase()
+  const preferEasy = EASY_BROKER_PROMPT_PATTERNS.some((pattern) => normalized.includes(pattern))
+
+  return [...KNOWN_DATA_BROKERS].sort((a, b) => {
+    if (preferEasy) return a.easeRank - b.easeRank
+    return 0
+  })
 }
 
 const DIGITAL_GHOST_PATTERNS = [
